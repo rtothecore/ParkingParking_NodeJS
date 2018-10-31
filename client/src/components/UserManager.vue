@@ -22,14 +22,10 @@
         >
           <v-text-field
             slot="activator"
-            v-model="startDate"
-            :error-messages="errors.collect('startDate')" 
+            v-model="startDate"            
             label="가입-시작날짜"
             prepend-icon="event"
-            readonly
-            required=""
-            v-validate="'required'" 
-            data-vv-name="startDate"
+            readonly            
           ></v-text-field>
           <v-date-picker v-model="startDate" no-title scrollable locale='euc-kr'>
             <v-spacer></v-spacer>
@@ -52,14 +48,10 @@
         >
           <v-text-field
             slot="activator"
-            v-model="endDate"
-            :error-messages="errors.collect('endDate')" 
+            v-model="endDate"            
             label="가입-종료날짜"
             prepend-icon="event"
-            readonly
-            required=""
-            v-validate="'required'" 
-            data-vv-name="endDate"
+            readonly            
           ></v-text-field>
           <v-date-picker v-model="endDate" no-title scrollable locale='euc-kr'>
             <v-spacer></v-spacer>
@@ -154,6 +146,7 @@
               <v-flex v-if="dlgForNew == 1" xs6 sm6 md4>
                 <v-btn outline @click.native="checkEmail">중복체크</v-btn>
               </v-flex>
+              <!-- ORIGINAL
               <v-flex v-if="dlgForNew == 1 || dlgLevel == 1" xs6 sm6 md12>
                 <v-text-field
                   v-validate="'required'"
@@ -176,6 +169,47 @@
                   :type="'password'"
                   counter></v-text-field>
               </v-flex>
+              -->
+              <v-flex v-if="dlgForNew == 1" xs6 sm6 md12>
+                <v-text-field
+                  v-validate="'required'"
+                  :error-messages="errors.collect('password')"
+                  data-vv-name="password"
+                  v-model="editedItem.password" 
+                  label="새 비밀번호(문자, 숫자, 특수기호 조합)" 
+                  outline
+                  :type="'password'"
+                  counter></v-text-field>
+              </v-flex>
+              <v-flex v-else-if="dlgForNew == 0 && dlgLevel == 1" xs6 sm6 md12>
+                <v-text-field
+                  v-model="editedItem.password" 
+                  label="비밀번호(문자, 숫자, 특수기호 조합)" 
+                  outline
+                  :type="'password'"
+                  counter></v-text-field>
+              </v-flex>
+
+              <v-flex v-if="dlgForNew == 1" xs6 sm6 md12>
+                <v-text-field
+                  v-validate="'required'"
+                  :error-messages="errors.collect('password2')"
+                  data-vv-name="password2"
+                  v-model="editedItem.password2" 
+                  label="새 비밀번호 확인" 
+                  outline
+                  :type="'password'"
+                  counter></v-text-field>
+              </v-flex>
+              <v-flex v-else-if="dlgForNew == 0 && dlgLevel == 1" xs6 sm6 md12>
+                <v-text-field
+                  v-model="editedItem.password2" 
+                  label="비밀번호 확인" 
+                  outline
+                  :type="'password'"
+                  counter></v-text-field>
+              </v-flex> 
+
               <v-flex xs6 sm12 md12>
                 <v-text-field
                   v-validate="'required'"
@@ -270,8 +304,8 @@
             <td class="text-xs-left">{{ props.item.email }}</td>
             <td class="text-xs-left">{{ props.item.phone_no }}</td>
             <td class="text-xs-left">{{ props.item.car_no }}</td>
-            <td class="text-xs-left">{{ props.item.car_type }}</td>
-            <td class="text-xs-left">{{ props.item.level }}</td>
+            <td class="text-xs-left">{{ props.item.car_typeValue }}</td>
+            <td class="text-xs-left">{{ props.item.levelValue }}</td>
             <td class="text-xs-left">{{ props.item.join_date }}</td>           
             <td class="justify-center layout px-0">
               <v-btn icon class="mx-0" @click="editItem(props.item)">
@@ -369,7 +403,9 @@ export default {
         phone_no: '',
         car_no: '',
         car_type: '',
-        level: ''
+        car_typeValue: '',
+        level: '',
+        levelValue: ''
       },
       users: [],
       dictionary: {
@@ -438,22 +474,37 @@ export default {
     async getAllUsers () {
       const response = await UserService.fetchAllUser({
       })
-      for (var i = 0; i < response.data.length; i++) {
-        switch (response.data[i].car_type) {
+      this.users = response.data
+      for (var i = 0; i < this.users.length; i++) {
+        switch (this.users[i].car_type) {
           case '1' :
-            response.data[i].car_type = '소형'
+            this.users[i].car_typeValue = '소형'
             break
           case '2' :
-            response.data[i].car_type = '중형'
+            this.users[i].car_typeValue = '중형'
             break
           case '3' :
-            response.data[i].car_type = '대형'
+            this.users[i].car_typeValue = '대형'
             break
           default :
             break
         }
       }
-      this.users = response.data
+      for (i = 0; i < this.users.length; i++) {
+        switch (this.users[i].level) {
+          case '1' :
+            this.users[i].levelValue = '최고관리자'
+            break
+          case '10' :
+            this.users[i].levelValue = '데이터관리자'
+            break
+          case '99' :
+            this.users[i].levelValue = '일반사용자'
+            break
+          default :
+            break
+        }
+      }
     },
     async updateUser () {
       await UserService.updateUser({
@@ -527,6 +578,36 @@ export default {
         searchContent: tmpSearchContent
       })
       this.users = response.data
+      for (var i = 0; i < this.users.length; i++) {
+        switch (this.users[i].car_type) {
+          case '1' :
+            this.users[i].car_typeValue = '소형'
+            break
+          case '2' :
+            this.users[i].car_typeValue = '중형'
+            break
+          case '3' :
+            this.users[i].car_typeValue = '대형'
+            break
+          default :
+            break
+        }
+      }
+      for (i = 0; i < this.users.length; i++) {
+        switch (this.users[i].level) {
+          case '1' :
+            this.users[i].levelValue = '최고관리자'
+            break
+          case '10' :
+            this.users[i].levelValue = '데이터관리자'
+            break
+          case '99' :
+            this.users[i].levelValue = '일반사용자'
+            break
+          default :
+            break
+        }
+      }
     },
     checkEmail () {
       // this.$validator.validateAll().then((result) => {
@@ -541,7 +622,9 @@ export default {
     editItem (item) {
       this.editedIndex = this.users.indexOf(item)
       this.editedItem = Object.assign({}, item)
-      if (this.users[this.editedIndex].level === '99') {  // 권한 레벨 99일 경우 비번수정이 불가능
+      // console.log(item)
+      this.editedItem.level = this.users[this.editedIndex].level
+      if (this.users[this.editedIndex].level === '99') {  // 권한 레벨 99인 일반사용자의 경우 비번수정이 불가능
         this.dlgLevel = 0
       } else {      // 권한 레벨 1, 10일 경우 비번수정 가능
         this.dlgLevel = 1
@@ -615,23 +698,26 @@ export default {
         // DB Insert
         if (this.editedIndex > -1) {  // 사용자 수정
           if (this.dlgLevel === 1) {  // 권한레벨이 99가 아닌 1, 10인 경우
-            // 비밀번호 유효성 검사
-            if (!this.validatePassword(this.editedItem.password)) {
-              this.$swal(
-                '유효한 암호를 입력해주세요',
-                '문자 + 숫자 + 특수기호 조합 최소6자리',
-                'error'
-              )
-              return
-            }
-            // 비밀번호 재확인 검사
-            if (this.editedItem.password !== this.editedItem.password2) {
-              this.$swal(
-                '동일한 암호를 입력해주세요',
-                '문자 + 숫자 + 특수기호 조합 최소6자리',
-                'error'
-              )
-              return
+            if (this.editedItem.password === '') {  // 비밀번호 입력하지 않은 경우 유효성검사를 하지 않는다.
+            } else {  // 비밀번호를 입력한 경우 유효성 검사를 한다.
+              // 비밀번호 유효성 검사
+              if (!this.validatePassword(this.editedItem.password)) {
+                this.$swal(
+                  '유효한 암호를 입력해주세요',
+                  '문자 + 숫자 + 특수기호 조합 최소6자리',
+                  'error'
+                )
+                return
+              }
+              // 비밀번호 재확인 검사
+              if (this.editedItem.password !== this.editedItem.password2) {
+                this.$swal(
+                  '동일한 암호를 입력해주세요',
+                  '문자 + 숫자 + 특수기호 조합 최소6자리',
+                  'error'
+                )
+                return
+              }
             }
           } else {    // 권한레벨이 99인 경우 비밀번호 수정을 못하도록 한다
             this.editedItem.password = ''
@@ -686,11 +772,11 @@ export default {
     },
     onChangeLevel: function (event) {
       // console.log(event)
+      this.editedItem.level = event
       // this.selectedLandId = event
       // this.getCropCodeByLandId(this.selectedLandId)
     },
     onChangeCarType: function (event) {
-      // console.log(event)
       this.editedItem.car_type = event
     },
     onChangeSearchType: function (event) {

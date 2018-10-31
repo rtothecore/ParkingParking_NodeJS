@@ -19,6 +19,13 @@ var bytes  = CryptoJS.AES.decrypt(ciphertext.toString(), cryptoKey);
 var plaintext = bytes.toString(CryptoJS.enc.Utf8);
 console.log("plaintext:" + plaintext);
 */
+
+// https://nodemailer.com/about/
+const nodemailer = require('nodemailer')
+
+// https://momentjs.com/docs/
+const moment = require('moment')
+
 var http = require('http'),
 	fs = require('fs')
 
@@ -156,6 +163,9 @@ app.post('/addNewUser', (req, res) => {
 	      console.log(error)
 	    }
 
+	    // 가입 축하메일 보내기
+	    sendMail(email, "[주차왕파킹]회원가입을 축하드립니다.", "주차왕파킹 회원이 되신것을 진심으로 환영합니다.")
+
 	    res.send({
 	      success: true,
 	      message: 'User saved successfully!',
@@ -168,6 +178,7 @@ app.post('/addNewUser', (req, res) => {
 // login with email & password
 // https://stackoverflow.com/questions/13397691/how-can-i-send-a-success-status-to-browser-from-nodejs-express
 app.get('/login/:email/:password', (req, res) => {
+	// console.log(req.params)
 	User.find({}, '', function (error, result) {
 		if (error) { console.error(error); }
 
@@ -175,15 +186,25 @@ app.get('/login/:email/:password', (req, res) => {
 			res.status(201).json([{error: "Invalid email"}]);
 		} else {
 			// Decrypt
-			var bytes  = CryptoJS.AES.decrypt(result[0].password, cryptoKey);
+			var bytes  = CryptoJS.AES.decrypt(result[0].password, cryptoKey);			
 			var plaintext = bytes.toString(CryptoJS.enc.Utf8);
-			
 			if(plaintext == req.params.password) {
-				res.status(200).json([{error: "Password ok"}]);
-			} else {
-				res.status(202).json([{error: "Invalid password"}]);
+				// res.status(200).json([{error: "Password ok"}]);				
+				res.send(result)
+			} else {				
+				res.status(202).json([{error: "Invalid password"}]);				
 			}
 		}
+	})
+	.where('email').equals(req.params.email)	
+})
+
+// Fetch users level
+app.get('/getUserLevel/:email', (req, res) => {
+	// console.log(req.params)
+	User.find({}, 'level', function (error, result) {
+		if (error) { console.error(error); }
+		res.send(result)
 	})
 	.where('email').equals(req.params.email)	
 })
@@ -322,6 +343,205 @@ app.get('/users/searchBy4/:startDate/:endDate/:searchType/:searchContent', (req,
   query.exec().then(result => {
   	res.send(result)
   })
+})
+
+function sendMail(toEmailAddress, emailSubject, emailContent) {
+	nodemailer.createTestAccount((err, account) => {
+	    // create reusable transporter object using the default SMTP transport
+	    /*    
+	    let transporter = nodemailer.createTransport({
+	        host: 'smtp.ethereal.email',
+	        port: 587,
+	        secure: false, // true for 465, false for other ports
+	        auth: {
+	            user: 'ttdyjsuwzhlot33n@ethereal.email', // generated ethereal user
+	            pass: 'Hr9pceW2HPd785y6RE' // generated ethereal password
+	        }
+	    });
+	    */
+	    // http://proal.tistory.com/76
+	    let transporter = nodemailer.createTransport({
+	        service: 'naver',
+	        auth: {
+	            user: 'chaosymphony@naver.com', // generated ethereal user
+	            pass: 'wrey6342' // generated ethereal password
+	        }
+	    });
+	    
+	    // setup email data with unicode symbols
+	    let mailOptions = {
+	        from: '"주차왕파킹 👻" <chaosymphony@naver.com>', // sender address
+	        // to: 'tinyblonco@hanmail.net, chaosymphony@naver.com, chaosymphony@gmail.com', // list of receivers
+	        to: toEmailAddress,
+	        // subject: 'Hello ✔', // Subject line
+	        subject: emailSubject,
+	        // text: 'Hello world?', // plain text body
+	        text: emailContent,
+	        // html: '<b>Hello world?</b>' // html body
+	    };
+
+	    // send mail with defined transport object
+	    transporter.sendMail(mailOptions, (error, info) => {
+	        if (error) {
+	            return console.log(error);
+	        }
+	        console.log('Message sent: %s', info.messageId);
+	        // Preview only available when sending through an Ethereal account
+	        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+
+	        // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
+	        // Preview URL: https://ethereal.email/message/WaQKMgKddxQDoou...
+	    });
+	});
+}
+
+// Find password with email
+app.get('/findPassword/:email', (req, res) => {
+	User.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+
+		if (0 == result.length) {
+			res.status(201).json([{error: "Invalid email"}]);
+		} else {
+			User.findById(result[0]._id, '', function (error, users) {
+		    	if (error) { console.error(error); }
+		    	var newPw = getRandomCode()	// 임시비밀번호 생성
+			    users.password = CryptoJS.AES.encrypt(newPw, cryptoKey)
+			    users.tmp_pw_date = getNowDate()
+			    users.save(function (error) {
+				    if (error) {
+				       	console.log(error)
+				    }
+				    // 임시비밀번호 이메일로 전송
+				    sendMail(req.params.email, "[주차왕파킹]임시비밀번호가 발급되었습니다.", "임시비밀번호 : " + newPw)
+
+				    res.status(200).json([{error: "Password is sent"}]);
+			    })
+			})
+		}
+	})
+	.where('email').equals(req.params.email)	
+})
+
+// Create random password
+// http://ilikefox.tistory.com/6
+function createCode(objArr, iLength) {
+    var arr = objArr;
+    var randomStr = "";
+    
+    for (var j=0; j<iLength; j++) {
+        randomStr += arr[Math.floor(Math.random()*arr.length)];
+    }
+    
+    return randomStr
+}
+
+// 대문자
+function getRandomBigLetter(iLength) {
+	var arr="A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z".split(",");
+    var rnd = createCode(arr, iLength);
+    return rnd;
+}
+
+// 소문자
+function getRandomSmallLetter(iLength) {
+	var arr="a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z".split(",");
+    var rnd = createCode(arr, iLength);    
+    return rnd;
+}
+
+// 특수문자
+function getRandomSpecialLetter(iLength) {
+	var arr="~,`,!,@,#,$,%,^,&,*,(,),-,+,|,_,=,\,[,],{,},<,>,?,/,.,;".split(",");
+    var rnd = createCode(arr, iLength);    
+    return rnd;
+}
+
+// 숫자
+function getRandomNum(iLength) {
+	var arr="0,1,2,3,4,5,6,7,8,9".split(",");
+    var rnd = createCode(arr, iLength);    
+    return rnd;
+}
+
+function getRandomCode() {
+	return getRandomBigLetter(2) + getRandomSmallLetter(2) + getRandomSpecialLetter(1) + getRandomNum(1)
+}
+
+// check login process
+app.get('/checkPasswordExpired/:email', (req, res) => {
+	User.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+
+		if (0 == result.length) {
+			res.status(201).json([{error: "Invalid email"}]);
+		} else {
+			if ("" == result[0].tmp_pw_date) {				
+				var pwExpireDate = moment(result[0].pw_date).add(3, 'months').format("YYYY-MM-DD HH:mm:ss")				
+				var nowDate = moment().format("YYYY-MM-DD HH:mm:ss")
+				if (nowDate > pwExpireDate) {
+					// 비번 수정 창으로 이동
+					console.log('pwDate expired!')
+					res.status(201).json([{error: "Expired password"}]);
+				} else {
+					// 로그인
+					console.log('pwDate not expired!')
+					res.status(200).json([{error: "Login success"}]);
+				}
+			} else {
+				var tmpPwExpireDate = moment(result[0].tmp_pw_date).add(1, 'days').format("YYYY-MM-DD HH:mm:ss")				
+				var nowDate = moment().format("YYYY-MM-DD HH:mm:ss")
+				if (nowDate > tmpPwExpireDate) {
+					// 임시비번 재발급 창으로 이동
+					console.log('tmpPwDate expired!')
+					res.status(202).json([{error: "Expired temp password"}]);
+				} else {
+					// 비번 수정 창으로 이동
+					console.log('tmpPwDate not expired!')
+					res.status(203).json([{error: "Move to update temp password"}]);
+				}
+			}			
+		}
+	})
+	.where('email').equals(req.params.email)	
+})
+
+// Update user password
+app.put('/updateUserPassword', (req, res) => {
+  	console.log(req.body)
+  	User.find({}, '', function (error, users) {
+    	if (error) { console.error(error); }
+
+    	// 기존 비밀번호 비교    	
+    	var inputNowPw = req.body.nowPassword;
+		var bytes  = CryptoJS.AES.decrypt(users[0].password, cryptoKey);
+		var plaintext = bytes.toString(CryptoJS.enc.Utf8);
+		
+		if (plaintext === inputNowPw) {
+			console.log("same")
+		} else {
+			console.log("different")
+			res.status(201).json([{error: "No match now password"}]);
+			return;
+		}
+
+	    if (req.body.password == "") {
+	    } else {
+	    	users[0].password = CryptoJS.AES.encrypt(req.body.password, cryptoKey)	
+	    }
+	    users[0].tmp_pw_date = ""
+	    users[0].pw_date = getNowDate()
+	    	    
+	    users[0].save(function (error) {
+		    if (error) {
+		       	console.log(error)
+		    }
+		    res.send({
+		        success: true
+		    })
+	    })
+	})
+	.where('email').equals(req.body.email)
 })
 
 /*

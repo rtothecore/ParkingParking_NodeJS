@@ -98,16 +98,35 @@ export default {
         })
         switch (response.status) {
           case 200 :
-            this.$swal({
-              type: 'success',
-              title: '로그인 성공',
-              showConfirmButton: false,
-              timer: 777
-            }).then((result) => {
-              this.$session.start()
-              this.$session.set('userId', response.data[0]._id)
-              this.$router.push('/')
+            const response2 = await UserService.fetchUserLevelByEmail({
+              email: this.email
             })
+            switch (response2.status) {
+              case 200:
+                if (response2.data[0].level === '1' || response2.data[0].level === '10') {
+                  this.$swal({
+                    type: 'success',
+                    title: '로그인 성공',
+                    showConfirmButton: false,
+                    timer: 777
+                  }).then((result) => {
+                    this.$session.start()
+                    this.$session.set('userId', response.data[0]._id)
+                    this.$router.push('/')
+                  })
+                } else {
+                  this.$swal({
+                    type: 'warning',
+                    title: '권한없음 - 일반사용자는 접근할 수 없습니다',
+                    showConfirmButton: false,
+                    timer: 777
+                  }).then((result) => {
+                  })
+                }
+                break
+              default :
+                break
+            }
             break
           case 201 :
             this.$swal({

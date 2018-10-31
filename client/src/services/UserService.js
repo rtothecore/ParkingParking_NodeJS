@@ -27,7 +27,11 @@ export default {
   },
 
   fetchUserByEmailNPw (params) {
-    return Api().get('login/' + params.email + '/' + params.pw, params)
+    return Api().get('login/' + params.email + '/' + encodeURI(params.pw), params)
+  },
+
+  fetchUserLevelByEmail (params) {
+    return Api().get('getUserLevel/' + params.email, params)
   },
 
   createNewUser (params) {
