@@ -6,9 +6,9 @@
         <h1>제보 관리</h1>
       </v-flex>
 
-      <v-flex v-if="$mq === 'laptop' || $mq === 'desktop'" md2 />
+      <v-flex v-if="$mq === 'laptop' || $mq === 'desktop'" md1 />
 
-      <!--
+      <!--  검색 시작 -->
        <v-flex xs6 sm6 md2>
         <v-menu
           ref="menu"
@@ -22,14 +22,10 @@
         >
           <v-text-field
             slot="activator"
-            v-model="startDate"
-            :error-messages="errors.collect('startDate')" 
-            label="시작날짜"
+            v-model="startDate"            
+            label="제보-기간날짜"
             prepend-icon="event"
-            readonly
-            required=""
-            v-validate="'required'" 
-            data-vv-name="startDate"
+            readonly            
           ></v-text-field>
           <v-date-picker v-model="startDate" no-title scrollable locale='euc-kr'>
             <v-spacer></v-spacer>
@@ -52,14 +48,10 @@
         >
           <v-text-field
             slot="activator"
-            v-model="endDate"
-            :error-messages="errors.collect('endDate')" 
-            label="종료날짜"
+            v-model="endDate"            
+            label="제보-기간날짜"
             prepend-icon="event"
-            readonly
-            required=""
-            v-validate="'required'" 
-            data-vv-name="endDate"
+            readonly            
           ></v-text-field>
           <v-date-picker v-model="endDate" no-title scrollable locale='euc-kr'>
             <v-spacer></v-spacer>
@@ -71,15 +63,44 @@
 
       <v-flex xs4 sm4 md2>
         <v-select
-          :items="WorkTypeitems"
+          :items="SearchTypeItems"
           v-model="e2"
-          label="작업분류"
+          label="검색어 분류"
           class="input-group--focused"
           item-text="text"
           item-value="value"
-          v-on:change="onChangeWorkType"
+          v-on:change="onChangeSearchType"
         ></v-select>
       </v-flex>
+
+      <v-flex xs4 sm4 md2>
+        <v-text-field
+            v-model="searchContent"
+            label="검색어"
+            required
+            outline 
+            v-if="setDisable()"
+            v-on:keyup="runSearch"></v-text-field>
+        <v-select
+          :items="SearchContentStatusItems"
+          v-model="e3"
+          label="상태 분류"
+          class="input-group--focused"
+          item-text="text"
+          item-value="value"
+          v-on:change="onChangeSearchContentStatus"
+          v-if="!setDisable()"></v-select>
+      </v-flex>
+      <!--
+      <v-flex xs4 sm4 md2>
+        <v-text-field
+            v-model="searchContent"
+            label="검색어"
+            required
+            outline
+            v-on:keyup.enter="onEnterClick"></v-text-field>
+      </v-flex>
+      -->
 
       <v-flex xs8 sm8 md2 class="text-xs-left">
         <v-btn
@@ -87,7 +108,7 @@
           :disabled="loading"
           color="light-blue"
           class="white--text"
-          @click.native="searchJournals"
+          @click.native="searchReports"
         >
           검색
         </v-btn>
@@ -99,50 +120,148 @@
           초기화
         </v-btn>
       </v-flex>
-      -->
+      <!-- 검색 끝 -->
 
       <v-flex v-if="$mq === 'laptop' || $mq === 'desktop'" md2 />
+      
+      <v-dialog v-model="dialog" fullscreen hide-overlay transition="dialog-bottom-transition">
+        <!-- <v-btn slot="activator" color="primary" dark>Open Dialog</v-btn> -->
+        <v-card>
+          <v-toolbar dark color="primary">
+            <v-btn icon dark @click.native="dialog = false">
+              <v-icon>close</v-icon>
+            </v-btn>
+            <v-toolbar-title>{{ formTitle }}</v-toolbar-title>
+            <v-spacer></v-spacer>
+            <v-toolbar-items>
+              <v-btn dark flat @click.native="dialog = false">저장</v-btn>
+            </v-toolbar-items>
+          </v-toolbar>
 
-      <v-dialog v-model="dialog" max-width="500px">
-      <v-btn slot="activator" color="primary" dark class="mb-2">새 사용자</v-btn>
-      <v-card color="teal">
-        <v-card-title>
-          <span class="headline" style="color:white">{{ formTitle }}</span>
-        </v-card-title>
-        <v-card-text>
-          <v-container grid-list-md>
-            <v-layout wrap>
-              <v-flex xs6 sm6 md12>
-                <v-text-field v-model="editedItem.name" label="이름" solo></v-text-field>
+          <v-list three-line subheader>
+            <v-subheader>제보 정보</v-subheader>
+            <v-list-tile avatar>
+              <v-list-tile-content>
+                <v-list-tile-title>제보일</v-list-tile-title>
+                <v-list-tile-sub-title>{{ editedItem.report_date }}</v-list-tile-sub-title>
+              </v-list-tile-content>
+              <v-list-tile-content>
+                <v-list-tile-title>제보자</v-list-tile-title>
+                <v-list-tile-sub-title>{{ editedItem.user_email }}</v-list-tile-sub-title>
+              </v-list-tile-content>
+              <v-list-tile-content>
+                <v-list-tile-title>제보자 연락처</v-list-tile-title>
+                <v-list-tile-sub-title>{{ editedItem.user_phone_no }}</v-list-tile-sub-title>
+              </v-list-tile-content>
+            </v-list-tile>            
+          </v-list>
+          <v-divider></v-divider>
+
+          <v-list three-line subheader>
+            <v-subheader>주차장 기본정보</v-subheader>
+            <v-list-tile avatar>
+              <v-list-tile-content>
+                <v-list-tile-title>GPS</v-list-tile-title>
+                <v-list-tile-sub-title>{{ editedItem.parking_lat }}, {{ editedItem.parking_lng }} 
+                  <v-btn color="info" @click.native="runDaumMap">맵에서 보기</v-btn>                
+                </v-list-tile-sub-title>
+              </v-list-tile-content>
+              <v-list-tile-content>
+                <v-list-tile-title>주차장 연락처</v-list-tile-title>
+                <v-list-tile-sub-title>{{ editedItem.parking_tel }}</v-list-tile-sub-title>
+              </v-list-tile-content>
+            </v-list-tile>            
+          </v-list>
+          <v-divider></v-divider>          
+
+          <v-list three-line subheader>
+            <v-subheader>주차장 요금정보</v-subheader>
+            <v-list-tile avatar>
+              <v-list-tile-content>
+                <v-list-tile-title>요금</v-list-tile-title>
+                <v-list-tile-sub-title>{{ editedItem.parking_fee_info }}</v-list-tile-sub-title>
+              </v-list-tile-content>
+            </v-list-tile>
+            <v-list-tile avatar>
+              <v-list-tile-content>
+                <v-list-tile-title>기타정보</v-list-tile-title>
+                <v-list-tile-sub-title>{{ editedItem.parking_etc_info }}
+                </v-list-tile-sub-title>
+              </v-list-tile-content>
+            </v-list-tile>
+          </v-list>
+          <v-divider></v-divider>
+          
+          <v-list three-line subheader>
+            <v-subheader>주차장 사진정보</v-subheader>               
+            <v-card>
+              <v-container grid-list-sm fluid>
+                <v-layout row wrap>
+                  <v-flex                    
+                    xs4
+                    d-flex
+                  >
+                    <v-card flat tile class="d-flex">
+                      <img :src="editedItem.parking_pictureA" height="400" @click="runImage(editedItem.parking_pictureA)">                      
+                    </v-card>
+                  </v-flex>
+                  <v-flex                    
+                    xs4
+                    d-flex
+                  >
+                    <v-card flat tile class="d-flex">
+                      <img :src="editedItem.parking_pictureB" height="400" @click="runImage(editedItem.parking_pictureB)">                      
+                    </v-card>
+                  </v-flex>
+                  <v-flex                    
+                    xs4
+                    d-flex
+                  >
+                    <v-card flat tile class="d-flex">
+                      <img :src="editedItem.parking_pictureC" height="400" @click="runImage(editedItem.parking_pictureC)">                      
+                    </v-card>
+                  </v-flex>
+                </v-layout>
+              </v-container>
+            </v-card>                 
+          </v-list>
+          <v-divider></v-divider>
+
+          <v-list three-line subheader>
+            <v-subheader>제보 상태</v-subheader>
+            <v-list-tile avatar>
+              <v-flex xs4 sm4 md2>
+                <v-select
+                  :items="ReportStatusItems"
+                  v-model="editedItem.status"
+                  label="제보 상태 선택"
+                  class="input-group--focused"
+                  item-text="text"
+                  item-value="value"
+                  v-on:change="onChangeReportStatus"
+                ></v-select>
               </v-flex>
-              <v-flex xs6 sm6 md12>
-                <v-text-field v-model="editedItem.email" label="이메일" solo></v-text-field>
-              </v-flex>
-              <v-flex xs6 sm6 md12>
-                <v-text-field v-model="editedItem.password" label="비밀번호" solo></v-text-field>
-              </v-flex>
-              <v-flex xs6 sm12 md12>
-                <v-text-field v-model="editedItem.phone_no" label="휴대폰" solo></v-text-field>
-              </v-flex>
-              <v-flex xs6 sm6 md6>
-                <v-text-field v-model="editedItem.car_no" label="차번호" solo></v-text-field>
-              </v-flex>
-              <v-flex xs6 sm6 md6>
-                <v-text-field v-model="editedItem.car_type" label="차종" solo></v-text-field>
-              </v-flex>
-              <v-flex xs12>
-                <v-text-field v-model="editedItem.level" label="권한" solo></v-text-field>
-              </v-flex>
-            </v-layout>
-          </v-container>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn outline color="white" flat @click.native="save">저장</v-btn>
-          <v-btn outline color="white" flat @click.native="close">닫기</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+            </v-list-tile>
+
+            <v-list-tile avatar v-if="setHoldReasonDisable()">
+              <v-list-tile-content>
+                <v-list-tile-title>보류사유</v-list-tile-title>
+                <v-list-tile-sub-title>
+                  <v-text-field
+                    v-model="holdReason"
+                    label="보류사유 입력"
+                    required
+                    outline 
+                  ></v-text-field>
+                </v-list-tile-sub-title>
+              </v-list-tile-content>
+            </v-list-tile>
+
+          </v-list>
+          <v-divider></v-divider>
+
+        </v-card>
+      </v-dialog>
     
     </v-layout>
   </v-container>
@@ -155,13 +274,12 @@
     <v-flex xs12 sm12 md12>
         <v-data-table
           :headers="headers"
-          :items="users"
+          :items="reports"
           :search="search"
           :pagination.sync="pagination"
           hide-actions
           class="elevation-1"
         >
-
           <template slot="headerCell" slot-scope="props">
             <v-tooltip bottom>
               <span slot="activator">
@@ -173,27 +291,19 @@
             </v-tooltip>
           </template>
           <template slot="items" slot-scope="props">
-            <td class="text-xs-left">{{ props.item.name }}</td>
-            <td class="text-xs-left">{{ props.item.email }}</td>
-            <td class="text-xs-left">{{ props.item.password }}</td>
-            <td class="text-xs-left">{{ props.item.phone_no }}</td>
-            <td class="text-xs-left">{{ props.item.car_no }}</td>
-            <td class="text-xs-left">{{ props.item.car_type }}</td>
-            <td class="text-xs-left">{{ props.item.level }}</td>
-            <td class="text-xs-left">{{ props.item.tmp_pw_date }}</td>
-            <td class="text-xs-left">{{ props.item.join_date }}</td>
-            <td class="text-xs-left">{{ props.item.mod_date }}</td>
-            <td class="text-xs-left">{{ props.item.pw_date }}</td>            
+            <td class="text-xs-left">{{ props.item.code }}</td>
+            <td class="text-xs-left">{{ props.item.parking_name }}</td>
+            <td class="text-xs-left">{{ props.item.user_email }}</td>
+            <td class="text-xs-left">{{ props.item.user_phone_no }}</td>
+            <td class="text-xs-left">{{ props.item.report_date }}</td>
+            <td class="text-xs-left">{{ props.item.statusValue }}</td>            
             <td class="justify-center layout px-0">
               <v-btn icon class="mx-0" @click="editItem(props.item)">
                 <v-icon color="teal">edit</v-icon>
               </v-btn>
               <v-btn icon class="mx-0" @click="deleteItem(props.item)">
                 <v-icon color="pink">delete</v-icon>
-              </v-btn>
-              <v-btn icon class="mx-0" @click="leaveItem(props.item)">
-                <v-icon color="red">time_to_leave</v-icon>
-              </v-btn>
+              </v-btn>              
             </td>
           </template>
         </v-data-table>
@@ -203,18 +313,56 @@
     </v-flex>
     <v-flex v-if="$mq === 'laptop' || $mq === 'desktop'" md2 />
     </v-layout>
+
+    <div>
+      <daumMapModal></daumMapModal>
+      <imageModal></imageModal>
+    </div>
+
   </v-container>
 </v-container>
 </template>
 
 <script>
-import UserService from '@/services/UserService'
+import ReportService from '@/services/ReportService'
+import {bus} from '../main'
 export default {
   $_veeValidate: {
     validator: 'new'
   },
   data () {
     return {
+      SearchContentStatusItems: [
+          { text: '접수', value: '0' },
+          { text: '승인중', value: '1' },
+          { text: '승인', value: '2' },
+          { text: '보류', value: '3' }
+      ],
+      gpsData: {},
+      e3: null,
+      searchContentDisabled: true,
+      searchContent: null,
+      selectedSearchType: null,
+      e2: null,
+      holdReason: null,
+      holdReasonDisabled: false,
+      ReportStatusItems: [
+          { text: '접수', value: '0' },
+          { text: '승인중', value: '1' },
+          { text: '승인', value: '2' },
+          { text: '보류', value: '3' }
+      ],
+      SearchTypeItems: [
+          { text: '코드', value: 'byCode' },
+          { text: '상태', value: 'byStatus' },
+          { text: '제보자', value: 'byUserEmail' },
+          { text: '주차장명', value: 'byParkingName' }
+      ],
+      menu: false,
+      menu2: false,
+      startDate: null,
+      endDate: null,
+      show1: false,
       search: null,
       loader: null,
       loading: false,
@@ -227,42 +375,56 @@ export default {
       formTitle: '',
       headers: [
         {
-          text: '이름',
+          text: '코드',
           align: 'left',
           sortable: false,
-          value: 'name',
-          width: '5%'
+          value: 'code',
+          width: '15%'
         },
-        { text: '이메일', value: 'email', align: 'left', width: '5%' },
-        { text: '비밀번호', value: 'password', align: 'left', width: '5%' },
-        { text: '휴대폰', value: 'phone_no', align: 'left', width: '5%' },
-        { text: '차번호', value: 'car_no', align: 'left', width: '5%' },
-        { text: '차종', value: 'car_type', align: 'left', width: '5%' },
-        { text: '권한', value: 'level', align: 'left', width: '5%' },
-        { text: '임시비번발급날짜', value: 'tmp_pw_date', align: 'left', width: '5%' },
-        { text: '가입날짜', value: 'join_date', align: 'left', width: '5%' },
-        { text: '수정날짜', value: 'mod_date', align: 'left', width: '5%' },
-        { text: '비번생성날짜', value: 'pw_date', align: 'left', width: '5%' },
+        { text: '주차장명', value: 'parking_name', align: 'left', width: '15%' },
+        { text: '제보자', value: 'user_email', align: 'left', width: '15%' },
+        { text: '제보자 연락처', value: 'user_phone_no', align: 'left', width: '15%' },
+        { text: '제보일', value: 'report_date', align: 'left', width: '15%' },
+        { text: '상태', value: 'status', align: 'left', width: '10%' },
         { text: '관리', value: 'manage', sortable: false, align: 'left', width: '5%' }
       ],
       editedIndex: -1,
       editedItem: {
-        name: '',
-        email: '',
-        password: '',
-        phone_no: '',
-        car_no: '',
-        car_type: '',
-        level: ''
+        parking_name: '',
+        report_date: '',
+        user_email: '',
+        user_phone_no: '',
+        code: '',
+        parking_lat: '',
+        parking_lng: '',
+        parking_tel: '',
+        parking_fee_info: '',
+        parking_etc_info: '',
+        parking_pictureA: '',
+        parking_pictureB: '',
+        parking_pictureC: '',
+        status: ''
       },
-      users: [],
+      reports: [],
       dictionary: {
         custom: {
-          startDate: {
-            required: '검색 시작날짜를 입력해주세요'
+          name: {
+            required: '이름을 입력해주세요'
           },
-          endDate: {
-            required: '검색 종료날짜를 입력해주세요'
+          email: {
+            required: '이메일 주소를 입력해주세요'
+          },
+          password: {
+            required: '비밀번호를 입력해주세요(문자, 숫자, 특수기호 조합)'
+          },
+          password2: {
+            required: '같은 비밀번호를 입력해주세요'
+          },
+          phoneNo: {
+            required: '휴대폰번호를 입력해주세요'
+          },
+          level: {
+            required: '권한을 선택해주세요'
           }
         }
       }
@@ -279,7 +441,7 @@ export default {
   },
   created () {
     this.userId = this.$session.get('userId')
-    this.getAllUsers()
+    this.getAllReports()
   },
   watch: {
     loader () {
@@ -299,11 +461,134 @@ export default {
     }
   },
   methods: {
-    async getAllUsers () {
-      const response = await UserService.fetchAllUser({
+    async getAllReports () {
+      const response = await ReportService.fetchAllReport({
       })
-      this.users = response.data
+      this.reports = response.data
+
+      for (var i = 0; i < this.reports.length; i++) {
+        switch (this.reports[i].status) {
+          case '0' :
+            this.reports[i].statusValue = '접수'
+            break
+          case '1' :
+            this.reports[i].statusValue = '승인중'
+            break
+          case '2' :
+            this.reports[i].statusValue = '승인'
+            break
+          case '3' :
+            this.reports[i].statusValue = '보류'
+            break
+        }
+      }
     },
+    async getReportsBy4 () {
+      var tmpSearchType = this.selectedSearchType
+      if (!tmpSearchType) {
+        tmpSearchType = 0
+      }
+      var tmpSearchContent = this.searchContent
+      if (!tmpSearchContent) {
+        tmpSearchContent = 0
+      }
+      const response = await ReportService.fetchReportsBy4({
+        startDate: this.startDate,
+        endDate: this.endDate,
+        searchType: tmpSearchType,
+        searchContent: tmpSearchContent
+      })
+      this.reports = response.data
+
+      for (var i = 0; i < this.reports.length; i++) {
+        switch (this.reports[i].status) {
+          case '0' :
+            this.reports[i].statusValue = '접수'
+            break
+          case '1' :
+            this.reports[i].statusValue = '승인중'
+            break
+          case '2' :
+            this.reports[i].statusValue = '승인'
+            break
+          case '3' :
+            this.reports[i].statusValue = '보류'
+            break
+        }
+      }
+    },
+    searchReports () {
+      this.loader = 'loading'
+      this.getReportsBy4()
+    },
+    editItem (item) {
+      this.editedIndex = this.reports.indexOf(item)
+      this.editedItem = Object.assign({}, item)
+      this.dialog = true
+      this.formTitle = this.reports[this.editedIndex].parking_name + '(' + this.reports[this.editedIndex].code + ')'
+      if (this.editedItem.parking_pictureA !== undefined) {
+        this.editedItem.parking_pictureA = 'http://192.168.0.73:9081/getReportImg/' + this.editedItem.parking_pictureA
+      }
+      if (this.editedItem.parking_pictureB !== undefined) {
+        this.editedItem.parking_pictureB = 'http://192.168.0.73:9081/getReportImg/' + this.editedItem.parking_pictureB
+      }
+      if (this.editedItem.parking_pictureC !== undefined) {
+        this.editedItem.parking_pictureC = 'http://192.168.0.73:9081/getReportImg/' + this.editedItem.parking_pictureC
+      }
+      this.gpsData.lat = this.editedItem.parking_lat
+      this.gpsData.lng = this.editedItem.parking_lng
+    },
+    setHoldReasonDisable () {
+      return this.holdReasonDisabled
+    },
+    runDaumMap () {
+      bus.$emit('dialogForDaumMap', this.gpsData)
+    },
+    runImage (imgSrc) {
+      // console.log(imgSrc)
+      bus.$emit('dialogForImage', imgSrc)
+    },
+    setDisable () {
+      return this.searchContentDisabled
+    },
+    searchReset () {
+      this.startDate = ''
+      this.endDate = ''
+      this.e2 = null
+      this.searchContent = ''
+      this.searchContentDisabled = true
+      this.getAllReports()
+      // this.$validator.reset()
+    },
+    runSearch: function (e) {
+      if (e.keyCode === 13) {
+        this.searchReports()
+      }
+    },
+    onChangeSearchType: function (event) {
+      this.selectedSearchType = event
+      if (event === 'byStatus') {
+        this.searchContentDisabled = false
+      } else {
+        this.searchContentDisabled = true
+      }
+    },
+    onEnterClick: function () {
+      this.searchReports()
+    },
+    onChangeReportStatus: function (event) {
+      console.log(event)
+      if (event === '3') {
+        this.holdReasonDisabled = true
+      } else {
+        this.holdReasonDisabled = false
+      }
+      // this.selectedSearchType = event
+    },
+    onChangeSearchContentStatus: function (event) {
+      this.searchContent = event
+    }
+    /*
     async updateUser () {
       await UserService.updateUser({
         id: this.editedItem._id,
@@ -329,14 +614,101 @@ export default {
         password: this.editedItem.password,
         phone_no: this.editedItem.phone_no,
         car_no: this.editedItem.car_no,
-        car_type: this.editedItem.car_type
+        car_type: this.editedItem.car_type,
+        level: this.editedItem.level
       })
+    },
+    async checkDuplicatedEmail (email) {
+      const response = await UserService.checkDupllicatedUserEmail(email)
+      if (response.data.length === 0) {
+        this.$swal(
+          '사용 가능한 이메일입니다',
+          '유효한 이메일이 확인되었습니다',
+          'success'
+        )
+        this.isValidEmail = true
+      } else {
+        this.$swal(
+          '이미 존재하는 이메일입니다',
+          '같은 주소의 이메일이 확인되었습니다',
+          'error'
+        )
+        this.editedItem.email = ''
+        this.isValidEmail = false
+      }
+    },
+    async getUsersBy4 () {
+      var tmpSearchType = this.selectedSearchType
+      if (!tmpSearchType) {
+        tmpSearchType = 0
+      }
+      var tmpSearchContent = this.searchContent
+      if (!tmpSearchContent) {
+        tmpSearchContent = 0
+      }
+      const response = await UserService.fetchUsersBy4({
+        startDate: this.startDate,
+        endDate: this.endDate,
+        searchType: tmpSearchType,
+        searchContent: tmpSearchContent
+      })
+      this.users = response.data
+      for (var i = 0; i < this.users.length; i++) {
+        switch (this.users[i].car_type) {
+          case '1' :
+            this.users[i].car_typeValue = '소형'
+            break
+          case '2' :
+            this.users[i].car_typeValue = '중형'
+            break
+          case '3' :
+            this.users[i].car_typeValue = '대형'
+            break
+          default :
+            break
+        }
+      }
+      for (i = 0; i < this.users.length; i++) {
+        switch (this.users[i].level) {
+          case '1' :
+            this.users[i].levelValue = '최고관리자'
+            break
+          case '10' :
+            this.users[i].levelValue = '데이터관리자'
+            break
+          case '99' :
+            this.users[i].levelValue = '일반사용자'
+            break
+          default :
+            break
+        }
+      }
+    },
+    checkEmail () {
+      // this.$validator.validateAll().then((result) => {
+      // https://jsfiddle.net/pp0w8u6s/
+      this.$validator.validate('email', this.editedItem.email).then((result) => {
+        if (!result) {
+          return
+        }
+        this.checkDuplicatedEmail(this.editedItem.email)
+      }).catch(() => {})
     },
     editItem (item) {
       this.editedIndex = this.users.indexOf(item)
       this.editedItem = Object.assign({}, item)
+      // console.log(item)
+      this.editedItem.level = this.users[this.editedIndex].level
+      if (this.users[this.editedIndex].level === '99') {  // 권한 레벨 99인 일반사용자의 경우 비번수정이 불가능
+        this.dlgLevel = 0
+      } else {      // 권한 레벨 1, 10일 경우 비번수정 가능
+        this.dlgLevel = 1
+        this.editedItem.password = '' // 기본적으로 비번 입력칸을 공백으로 두어 비번입력을 해야 수정 가능하도록 함
+        this.editedItem.password2 = ''
+      }
       this.dialog = true
       this.formTitle = '사용자 수정 - ' + this.users[this.editedIndex].name
+      this.dlgForNew = 0
     },
     deleteItem (item) {
       const index = this.users.indexOf(item)
@@ -386,29 +758,128 @@ export default {
     },
     close () {
       this.dialog = false
+      this.formTitle = '새 사용자 추가'
+      this.dlgForNew = 1
       setTimeout(() => {
         this.editedItem = Object.assign({}, this.defaultItem)
         this.editedIndex = -1
       }, 300)
     },
     save () {
-      if (this.editedIndex > -1) {
-        this.updateUser()
-        this.users.splice(this.editedIndex, 1)
-        this.users.push(this.editedItem)
+      this.$validator.validateAll().then((result) => {
+        if (!result) {
+          return
+        }
+        // DB Insert
+        if (this.editedIndex > -1) {  // 사용자 수정
+          if (this.dlgLevel === 1) {  // 권한레벨이 99가 아닌 1, 10인 경우
+            if (this.editedItem.password === '') {  // 비밀번호 입력하지 않은 경우 유효성검사를 하지 않는다.
+            } else {  // 비밀번호를 입력한 경우 유효성 검사를 한다.
+              // 비밀번호 유효성 검사
+              if (!this.validatePassword(this.editedItem.password)) {
+                this.$swal(
+                  '유효한 암호를 입력해주세요',
+                  '문자 + 숫자 + 특수기호 조합 최소6자리',
+                  'error'
+                )
+                return
+              }
+              // 비밀번호 재확인 검사
+              if (this.editedItem.password !== this.editedItem.password2) {
+                this.$swal(
+                  '동일한 암호를 입력해주세요',
+                  '문자 + 숫자 + 특수기호 조합 최소6자리',
+                  'error'
+                )
+                return
+              }
+            }
+          } else {    // 권한레벨이 99인 경우 비밀번호 수정을 못하도록 한다
+            this.editedItem.password = ''
+          }
+          this.updateUser()
+          this.users.splice(this.editedIndex, 1)
+          this.users.push(this.editedItem)
+        } else {                      // 새 사용자 추가
+          // 이메일 유효성 검사
+          if (!this.isValidEmail) {
+            this.$swal(
+              '이메일 중복체크를 해주세요',
+              '이메일 중복체크가 안되었습니다',
+              'error'
+            )
+            return
+          }
+          // 비밀번호 유효성 검사
+          if (!this.validatePassword(this.editedItem.password)) {
+            this.$swal(
+              '유효한 암호를 입력해주세요',
+              '문자 + 숫자 + 특수기호 조합 최소6자리',
+              'error'
+            )
+            return
+          }
+          // 비밀번호 재확인 검사
+          if (this.editedItem.password !== this.editedItem.password2) {
+            this.$swal(
+              '동일한 암호를 입력해주세요',
+              '문자 + 숫자 + 특수기호 조합 최소6자리',
+              'error'
+            )
+            return
+          }
+          this.createNewUser()
+          this.users.push(this.editedItem)
+        }
+        this.editedItem = Object.assign({}, this.defaultItem)
+        this.$swal({
+          type: 'success',
+          title: '사용자를 저장하였습니다',
+          showConfirmButton: false,
+          timer: 777
+        })
+        this.dialog = false
+      }).catch(() => {})
+    },
+    // http://frontend.diffthink.kr/2018/02/blog-post.html
+    validatePassword (character) {
+      return /^(?=.*[A-Za-z])(?=.*\d)(?=.*[$@$!%*#?&])[A-Za-z\d$@$!%*#?&]{6,}$/.test(character)
+    },
+    onChangeLevel: function (event) {
+      // console.log(event)
+      this.editedItem.level = event
+      // this.selectedLandId = event
+      // this.getCropCodeByLandId(this.selectedLandId)
+    },
+    onChangeCarType: function (event) {
+      this.editedItem.car_type = event
+    },
+    onChangeSearchType: function (event) {
+      this.selectedSearchType = event
+      if (event === 'byLevel') {
+        this.searchContentDisabled = false
       } else {
-        this.createNewUser()
-        this.users.push(this.editedItem)
+        this.searchContentDisabled = true
       }
-      this.editedItem = Object.assign({}, this.defaultItem)
-      this.$swal({
-        type: 'success',
-        title: '일지를 저장하였습니다',
-        showConfirmButton: false,
-        timer: 777
-      })
-      this.dialog = false
-    }
+    },
+    onChangeSearchContentLevel: function (event) {
+      // console.log(event)
+      this.searchContent = event
+    },
+    searchUsers () {
+      this.loader = 'loading'
+      this.getUsersBy4()
+    },
+    searchReset () {
+      this.startDate = ''
+      this.endDate = ''
+      this.e2 = null
+      this.searchContent = ''
+      this.searchContentDisabled = true
+      this.getAllUsers()
+      this.$validator.reset()
+    },
+    */
   }
 }
 </script>

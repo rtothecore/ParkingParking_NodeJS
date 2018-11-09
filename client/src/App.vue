@@ -88,7 +88,8 @@
         sidebar: false,
         menuItems: [
           {title: '사용자관리', path: '/', icon: 'assignment_turned_in', class: 'homeImg'},
-          {title: '주차장관리', path: '/parkManager', icon: 'assignment', class: 'searchImg'},
+          {title: '주차장관리', path: '/parkingManager', icon: 'assignment', class: 'searchImg'},
+          {title: '주차장관리(맵)', path: '/parkingMap', icon: 'map', class: 'searchImg'},
           {title: '제보관리', path: '/reportManager', icon: 'assignment_late', class: 'predictImg'}
           /* {title: '통계', path: '/stats', icon: 'assessment'}, */
           // {title: '설정', path: '/config', icon: 'build', class: 'setImg'}

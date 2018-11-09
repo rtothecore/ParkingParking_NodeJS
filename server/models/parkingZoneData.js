@@ -47,7 +47,8 @@ var ParkingZoneDataSchema = new Schema({
 	data_date: String,
 	homepage: String,
 	park_space_count: ParkSpaceSchema,
-	sale_info: String
+	sale_info: String,
+	display: String
 })
 
 var ParkingZoneData = mongoose.model("ParkingZoneData", ParkingZoneDataSchema)

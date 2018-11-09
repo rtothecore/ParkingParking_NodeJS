@@ -26,6 +26,41 @@ const nodemailer = require('nodemailer')
 // https://momentjs.com/docs/
 const moment = require('moment')
 
+const multer = require('multer')
+
+const path = require('path');
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, 'reportImgs/');
+    },
+    filename: function (req, file, cb) {
+      cb(null, new Date().valueOf() + path.extname(file.originalname));
+    }
+  }),
+});
+const uploadForExcel = multer({
+  storage: multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, 'excels/');
+    },
+    filename: function (req, file, cb) {
+      cb(null, new Date().valueOf() + path.extname(file.originalname));
+    }
+  }),
+});
+
+const XLSX = require("xlsx")
+var NodeGeocoder = require('node-geocoder')
+var options = {
+  provider: 'google',
+  // Optional depending on the providers
+  httpAdapter: 'https', // Default
+  apiKey: 'AIzaSyAbcu_ORn9DV9mv0GFbxwX3FrYFMyL-nRA', // for Mapquest, OpenCage, Google Premier
+  formatter: null         // 'gpx', 'string', ...
+};
+var geocoder = NodeGeocoder(options);
+
 var http = require('http'),
 	fs = require('fs')
 
@@ -35,7 +70,11 @@ var port1 = 9081
 
 var app = express()
 app.use(morgan('combined'))
-app.use(bodyParser.json())
+// app.use(bodyParser.json())
+// https://github.com/apostrophecms/apostrophe/issues/1291
+app.use(bodyParser.json({limit: "50mb", extended: true}));
+app.use(bodyParser.urlencoded({limit: "50mb", extended: true, parameterLimit:50000}));
+
 app.use(cors())
 
 http.createServer(app).listen(port1, function () {
@@ -56,6 +95,344 @@ var SmsAuth = require("../models/smsAuth")
 var User = require("../models/user")
 var JoinUser = require("../models/joinuser")
 var LeaveUser = require("../models/leaveuser")
+var Report = require("../models/report")
+
+// https://www.zerocho.com/category/NodeJS/post/5950a6c4f7934c001894ea83
+app.post('/reportImg/upload', upload.single('img'), (req, res) => {
+	console.log(req.file);
+	res.status(200).json([{error: "uploaded successfully", imgName: req.file.filename}]);	
+});
+
+function updateOrInsertParkingData(wsJsonData) {	 			
+	updateOrInsertData(wsJsonData);	
+	updateReport(wsJsonData.no, '1');
+}
+
+function updateReport(reportCode, statusVal) {
+	Report.find({}, '', function (error, reports) {
+		if (error) { console.error(error); }		
+		reports[0].status = statusVal
+		reports[0].save(function (error) {
+			if (error) { console.log(error) }
+			console.log('Report collection updated!')
+		})		
+	})
+	.where('code').equals(reportCode)
+}
+
+function updateOrInsertData(wsJsonData) {	
+	ParkingZoneData.find({}, '', function (error, pzds) {
+	    if (error) { console.error(error); }		    	    
+	    
+	    if (0 < pzds.length) {
+	    	console.log('data exists! - update');
+	    	updateParkingData(pzds[0], wsJsonData);	    	
+	    } else {
+	    	console.log('data no exists! - insert')	    	 	
+	    	insertParkingData(wsJsonData)
+	    }	    	    
+	})
+	.where('no').equals(wsJsonData.no)
+}
+
+function updateParkingData(pzd, wsJsonData) {
+	if(undefined != wsJsonData.name)
+		pzd.name = wsJsonData.name
+	if(undefined != wsJsonData.division)
+		pzd.division = wsJsonData.division
+	if(undefined != wsJsonData.type)
+		pzd.type = wsJsonData.type
+	if(undefined != wsJsonData.addr_road)
+		pzd.addr_road = wsJsonData.addr_road
+	if(undefined != wsJsonData.addr_jibun)
+		pzd.addr_jibun = wsJsonData.addr_jibun
+	if(undefined != wsJsonData.total_p)
+		pzd.total_p = wsJsonData.total_p
+	if(undefined != wsJsonData.feed)
+		pzd.feed = wsJsonData.feed
+	if(undefined != wsJsonData.buje)
+		pzd.buje = wsJsonData.buje
+	if(undefined != wsJsonData.op_date)
+		pzd.op_date = wsJsonData.op_date
+	if(undefined != wsJsonData.fee_info)
+		pzd.fee_info = wsJsonData.fee_info
+	if(undefined != wsJsonData.month_fee)
+		pzd.month_fee = wsJsonData.month_fee
+	if(undefined != wsJsonData.payment)
+		pzd.payment = wsJsonData.payment
+	if(undefined != wsJsonData.remarks)
+		pzd.remarks = wsJsonData.remarks
+	if(undefined != wsJsonData.manager)
+		pzd.manager = wsJsonData.manager
+	if(undefined != wsJsonData.tel)
+		pzd.tel = wsJsonData.tel
+	if(undefined != wsJsonData.lat)
+		pzd.lat = wsJsonData.lat
+	if(undefined != wsJsonData.lng)
+		pzd.lng = wsJsonData.lng
+	if(undefined != wsJsonData.data_date)
+		pzd.data_date = wsJsonData.data_date
+	if(undefined != wsJsonData.homepage)
+		pzd.homepage = wsJsonData.homepage
+	if(undefined != wsJsonData.sale_info)
+		pzd.sale_info = wsJsonData.sale_info
+	if(undefined != wsJsonData.display)
+		pzd.display = wsJsonData.display
+
+	if(undefined != wsJsonData.w_op_start_time) {		
+		pzd.w_op.start_time = wsJsonData.w_op_start_time
+		pzd.w_op.end_time = wsJsonData.w_op_end_time
+	}
+
+	if(undefined != wsJsonData.s_op_start_time) {		
+		pzd.s_op.start_time = wsJsonData.s_op_start_time
+		pzd.s_op.end_time = wsJsonData.s_op_end_time
+	}
+
+	if(undefined != wsJsonData.h_op_start_time) {		
+		pzd.h_op.start_time = wsJsonData.h_op_start_time
+		pzd.h_op.end_time = wsJsonData.h_op_end_time
+	}
+
+	if(undefined != wsJsonData.park_base_time) {			
+		pzd.park_base.time = wsJsonData.park_base_time
+		pzd.park_base.fee = wsJsonData.park_base_fee
+	}
+
+	if(undefined != wsJsonData.add_term_time) {		
+		pzd.add_term.time = wsJsonData.add_term_time
+		pzd.add_term.fee = wsJsonData.add_term_fee	
+	}
+
+	if(undefined != wsJsonData.one_day_park_time) {		
+		pzd.one_day_park.time = wsJsonData.one_day_park_time
+		pzd.one_day_park.fee = wsJsonData.one_day_park_fee
+	}
+
+	if(undefined != wsJsonData.park_space_count_small) {		
+		pzd.park_space_count.small = wsJsonData.park_space_count_small
+		pzd.park_space_count.mid = wsJsonData.park_space_count_mid
+		pzd.park_space_count.big = wsJsonData.park_space_count_big
+		pzd.park_space_count.elec = wsJsonData.park_space_count_elec
+		pzd.park_space_count.hand = wsJsonData.park_space_count_hand
+	}
+
+	pzd.save(function (error) {
+		if (error) { console.log(error) }
+		console.log('Updated!')
+	})
+}
+
+function insertParkingData(wsJsonData) {
+	var no
+	var name
+	var division
+	var type
+	var addr_road
+	var addr_jibun
+	var total_p
+	var feed
+	var buje
+	var op_date
+	var fee_info
+	var month_fee
+	var payment
+	var remarks
+	var manager
+	var tel
+	var lat
+	var lng
+	var data_date
+	var homepage
+	var sale_info
+	var display
+	
+	var w_op = {}
+	var s_op = {}
+	var h_op = {}
+	var park_base = {}
+	var add_term = {}
+	var one_day_park = {}
+	var park_space_count = {}
+
+	if(undefined != wsJsonData.no)
+		no = wsJsonData.no
+	if(undefined != wsJsonData.name)
+		name = wsJsonData.name
+	if(undefined != wsJsonData.division)
+		division = wsJsonData.division
+	if(undefined != wsJsonData.type)
+		type = wsJsonData.type
+	if(undefined != wsJsonData.addr_road)
+		addr_road = wsJsonData.addr_road
+	if(undefined != wsJsonData.addr_jibun)
+		addr_jibun = wsJsonData.addr_jibun
+	if(undefined != wsJsonData.total_p)
+		total_p = wsJsonData.total_p
+	if(undefined != wsJsonData.feed)
+		feed = wsJsonData.feed
+	if(undefined != wsJsonData.buje)
+		buje = wsJsonData.buje
+	if(undefined != wsJsonData.op_date)
+		op_date = wsJsonData.op_date
+	if(undefined != wsJsonData.fee_info)
+		fee_info = wsJsonData.fee_info
+	if(undefined != wsJsonData.month_fee)
+		month_fee = wsJsonData.month_fee
+	if(undefined != wsJsonData.payment)
+		payment = wsJsonData.payment
+	if(undefined != wsJsonData.remarks)
+		remarks = wsJsonData.remarks
+	if(undefined != wsJsonData.manager)
+		manager = wsJsonData.manager
+	if(undefined != wsJsonData.tel)
+		tel = wsJsonData.tel
+	if(undefined != wsJsonData.lat)
+		lat = wsJsonData.lat
+	if(undefined != wsJsonData.lng)
+		lng = wsJsonData.lng
+	if(undefined != wsJsonData.data_date)
+		data_date = wsJsonData.data_date
+	if(undefined != wsJsonData.homepage)
+		homepage = wsJsonData.homepage
+	if(undefined != wsJsonData.sale_info)
+		sale_info = wsJsonData.sale_info
+	if(undefined != wsJsonData.display)
+		display = wsJsonData.display
+
+	if(undefined != wsJsonData.w_op_start_time) {		
+		w_op.start_time = wsJsonData.w_op_start_time
+		w_op.end_time = wsJsonData.w_op_end_time
+	}
+
+	if(undefined != wsJsonData.s_op_start_time) {		
+		s_op.start_time = wsJsonData.s_op_start_time
+		s_op.end_time = wsJsonData.s_op_end_time
+	}
+
+	if(undefined != wsJsonData.h_op_start_time) {		
+		h_op.start_time = wsJsonData.h_op_start_time
+		h_op.end_time = wsJsonData.h_op_end_time
+	}
+
+	if(undefined != wsJsonData.park_base_time) {			
+		park_base.time = wsJsonData.park_base_time
+		park_base.fee = wsJsonData.park_base_fee
+	}
+
+	if(undefined != wsJsonData.add_term_time) {		
+		add_term.time = wsJsonData.add_term_time
+		add_term.fee = wsJsonData.add_term_fee	
+	}
+
+	if(undefined != wsJsonData.one_day_park_time) {		
+		one_day_park.time = wsJsonData.one_day_park_time
+		one_day_park.fee = wsJsonData.one_day_park_fee
+	}
+
+	if(undefined != wsJsonData.park_space_count_small) {		
+		park_space_count.small = wsJsonData.park_space_count_small
+		park_space_count.mid = wsJsonData.park_space_count_mid
+		park_space_count.big = wsJsonData.park_space_count_big
+		park_space_count.elec = wsJsonData.park_space_count_elec
+		park_space_count.hand = wsJsonData.park_space_count_hand
+	}
+
+	var new_parking = new ParkingZoneData({
+  		no: no,
+		name: name,
+		division: division,
+		type: type,
+		addr_road: addr_road,
+		addr_jibun: addr_jibun,
+		total_p: total_p,
+		feed: feed,
+		buje: buje,
+		op_date: op_date,
+		fee_info: fee_info,
+		month_fee: month_fee,
+		payment: payment,
+		remarks: remarks,
+		manager: manager,
+		tel: tel,
+		lat: lat,
+		lng: lng,
+		data_date: data_date,
+		homepage: homepage,
+		sale_info: sale_info,
+		display: display,
+		w_op: w_op,
+		s_op: s_op,
+		h_op: h_op,
+		park_base: park_base,
+		add_term: add_term,
+		one_day_park: one_day_park,
+		park_space_count: park_space_count
+  	})
+
+  	new_parking.save(function (error, result) {
+    	if (error) {
+      		console.log(error)
+    	}
+    	console.log('Inserted!')
+  	})
+}
+
+app.post('/excel/upload', uploadForExcel.single('excel'), (req, res) => {
+	// console.log(req.file);
+
+	// 1. Parsing xlsx file
+	let workbook = XLSX.readFile("excels/" + req.file.filename)
+    let worksheet = workbook.Sheets["parkingData"]
+    var wsJson = XLSX.utils.sheet_to_json(worksheet);
+    // console.log(wsJson)    
+
+    // 2. Geocoding - https://www.npmjs.com/package/node-geocoder
+    for (wsIndex in wsJson) {
+    	if (undefined != wsJson[wsIndex].addr_road && undefined == wsJson[wsIndex].lat) {	// 주소가 있고 GPS가 없는 경우     		
+    		geocoder.geocode(wsJson[wsIndex].addr_road, function(err, res) {
+    			wsJson[wsIndex].lat = res[0].latitude;
+    			wsJson[wsIndex].lng = res[0].longitude;       			
+    			// 3. Check already registered data
+    			// 4. Update data or Insert data to parkingzonedatas collection    			    		
+    			// 5. Update reports collection with status = 1    			
+    			updateOrInsertParkingData(wsJson[wsIndex]);
+    		});    		    		    		
+    	} else if (undefined == wsJson[wsIndex].addr_road && undefined != wsJson[wsIndex].lat) {	// 주소가 없고 GPS가 있는 경우
+    		geocoder.reverse({lat:wsJson[wsIndex].lat, lon:wsJson[wsIndex].lng}, function(err, res) {
+    			wsJson[wsIndex].addr_road = res[0].formattedAddress;       			
+    			// 3. Check already registered data
+    			// 4. Update data or Insert data to parkingzonedatas collection    			    			
+    			// 5. Update reports collection with status = 1
+    			updateOrInsertParkingData(wsJson[wsIndex]);
+			});
+    	} else if (undefined != wsJson[wsIndex].addr_road && undefined != wsJson[wsIndex].lat) {	// 주소가 있고 GPS도 있는 경우    		
+    		// 3. Check already registered data
+			// 4. Update data or Insert data to parkingzonedatas collection    						
+			// 5. Update reports collection with status = 1			
+			updateOrInsertParkingData(wsJson[wsIndex]);
+    	}
+    }    
+
+	res.status(200).json([{error: "uploaded successfully", imgName: req.file.filename}]);	
+});
+
+// Get report images - https://stackoverflow.com/questions/5823722/how-to-serve-an-image-using-nodejs
+app.get('/getReportImg/:imgName', (req, res) => {
+	var img = fs.readFileSync('reportImgs/' + req.params.imgName);
+    res.writeHead(200, {'Content-Type': 'image/jpg' });
+    res.end(img, 'binary');
+})
+
+// Get excel file
+app.get('/getExcel/:excelName', (req, res) => {
+	/*
+	var excel = fs.readFileSync('excels/' + req.params.excelName);
+    res.writeHead(200, {'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    res.end(excel, 'binary');
+	*/
+    res.download('excels/' + req.params.excelName);
+})
 
 // Fetch all data of parkingzonedatas
 app.get('/pzData', (req, res) => {
@@ -542,6 +919,358 @@ app.put('/updateUserPassword', (req, res) => {
 	    })
 	})
 	.where('email').equals(req.body.email)
+})
+
+function getNowDateForCode() {
+	var nowDate = new Date()
+	var nowDateValue = ''
+	nowDateValue = leadingZeros(nowDate.getFullYear(), 4) +
+			   	   leadingZeros(nowDate.getMonth() + 1, 2) +
+			   	   leadingZeros(nowDate.getDate(), 2) +
+			   	   leadingZeros(nowDate.getHours(), 2) +
+			   	   leadingZeros(nowDate.getMinutes(), 2) +
+			   	   leadingZeros(nowDate.getSeconds(), 2)
+	return nowDateValue
+}
+
+// Fetch journals by date, workType, workContent
+app.get('/getReportCode', (req, res) => {    
+	var reportCode = ""
+	var now_date = getNowDateForCode();
+	console.log(now_date)
+	var query = Report.find({})
+ 	query.where('code').regex(now_date)
+ 	query.sort('-code') // give me the max
+ 	query.exec().then(result => {
+ 		if (0 < result.length) { 			
+ 			var lastCode = result[0].code.substring(15, 18) 			 			
+ 			lastCode = lastCode * 1 + 1 			
+ 			lastCode = leadingZeros(lastCode, 3)
+ 			reportCode = "R" + now_date + lastCode 			
+ 		} else {
+ 			reportCode = "R" + now_date + "001"
+ 		}
+ 		res.status(200).json([{error: "getReportCode success", reportCode: reportCode}]); 	
+	})
+})
+
+// Add new report
+app.post('/addNewReport', (req, res) => {
+  console.log(req.body);
+  var code = req.body.code;
+  var report_date = getNowDate();
+  var user_email = req.body.user_email;
+  var user_phone_no = req.body.user_phone_no;
+  var parking_name = req.body.parking_name;
+  var parking_lat = req.body.parking_lat;
+  var parking_lng = req.body.parking_lng;
+  var parking_tel = req.body.parking_tel;
+  var parking_fee_info = req.body.parking_fee_info;
+  var parking_etc_info = req.body.parking_etc_info;
+  var parking_pictureA = req.body.parking_pictureA;
+  var parking_pictureB = req.body.parking_pictureB;
+  var parking_pictureC = req.body.parking_pictureC;
+  var status = "0"
+  var hold_reason = ""
+
+  var new_report = new Report({
+    code: code,
+    report_date: report_date,
+    user_email: user_email,
+    user_phone_no: user_phone_no,
+    parking_name: parking_name,
+    parking_lat: parking_lat,
+    parking_lng: parking_lng,
+    parking_tel: parking_tel,
+    parking_fee_info: parking_fee_info,
+    parking_etc_info: parking_etc_info,
+    parking_pictureA: parking_pictureA,
+    parking_pictureB: parking_pictureB,
+    parking_pictureC: parking_pictureC,
+    status: status,
+    hold_reason: hold_reason
+  })
+
+  new_report.save(function (error, result) {
+    if (error) {
+    	console.log(error)
+    }
+    res.send({
+    	success: true,
+	    message: 'Report saved successfully!',
+	    result: result
+	})
+  })
+})
+
+// Fetch all data of report
+app.get('/getAllReport', (req, res) => {
+	Report.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	})
+})
+
+// Fetch reports by date, searchType, searchContent
+app.get('/reports/searchBy4/:startDate/:endDate/:searchType/:searchContent', (req, res) => {
+  console.log(req.params)
+  var query = Report.find({})
+  
+  if('null' == req.params.startDate) {  	  	
+  	console.log('startDate null!')
+  } else {
+  	query.where('report_date').gte(req.params.startDate + " 00:00:00")
+  }
+  if('null' == req.params.endDate) {
+  	console.log('endDate null!')
+  } else {
+  	query.where('report_date').lte(req.params.endDate + " 23:59:59")
+  }
+
+  if((0 != req.params.searchType) && (0 != req.params.searchContent)) {
+  	switch(req.params.searchType) {
+  		case 'byUserEmail' :
+  			query.where('user_email').regex(req.params.searchContent)
+  			break;
+  		case 'byParkingName' :
+  			query.where('parking_name').regex(req.params.searchContent)
+  			break;
+  		case 'byCode' :
+  			query.where('code').regex(req.params.searchContent)
+  			break;
+  		case 'byStatus' :
+  			query.where('status').regex(req.params.searchContent)
+  			break;  
+  		default :
+  			break;
+  	}
+  }
+
+  query.exec().then(result => {
+  	res.send(result)
+  })
+})
+
+// Fetch all data of parking
+app.get('/getAllParking', (req, res) => {
+	ParkingZoneData.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	})
+})
+
+// Fetch all data of parking with display
+app.get('/getParkingWithDisplay/:display', (req, res) => {
+	ParkingZoneData.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	})
+	.where('display').equals(req.params.display)
+})
+
+// Fetch parkings by date, searchType, searchContent
+app.get('/parkings/searchBy4/:startDate/:endDate/:searchType/:searchContent', (req, res) => {
+  console.log(req.params)
+  var query = ParkingZoneData.find({})
+  
+  if('null' == req.params.startDate || 'undefined' == req.params.startDate) {  	  	
+  	console.log('startDate null!')
+  } else {
+  	query.where('data_date').gte(req.params.startDate + " 00:00:00")
+  }
+  if('null' == req.params.endDate || 'undefined' == req.params.endDate) {
+  	console.log('endDate null!')
+  } else {
+  	query.where('data_date').lte(req.params.endDate + " 23:59:59")
+  }
+
+  if((0 != req.params.searchType) && (0 != req.params.searchContent)) {
+  	switch(req.params.searchType) {
+  		case 'byNo' :
+  			query.where('no').regex(req.params.searchContent)
+  			break;
+  		case 'byParkingName' :
+  			query.where('name').regex(req.params.searchContent)
+  			break;
+  		case 'byAddress' :
+  			query.where('addr_road').regex(req.params.searchContent)
+  			break;
+  		default :
+  			break;
+  	}
+  }
+
+  query.exec().then(result => {
+  	console.log(result)
+  	res.send(result)
+  })
+})
+
+// Delete parking
+app.delete('/deleteParking/:id', (req, res) => {
+	// console.log(req.params.id)	
+	ParkingZoneData.remove({
+		_id: req.params.id
+	}, function(err, lands) {
+		if (err) {
+			res.send(err)
+		}
+		res.send({
+			success: true
+		})
+	})	
+})
+
+// Update report with status
+app.put('/updateReport', (req, res) => {
+	updateReport(req.body.code, req.body.status);
+	res.status(200).json([{error: "Report status updated successfully"}]);	
+})
+
+// Update parking
+app.put('/updateParking/:id', (req, res) => {
+  	console.log(req.body)
+  	ParkingZoneData.findById(req.params.id, '', function (error, parkings) {
+    	if (error) { console.error(error); }
+
+		if (('null' != req.body.name) && (undefined != req.body.name)) {
+			parkings.name = req.body.name;		
+		}
+	    if (('null' != req.body.division) && (undefined != req.body.division)) {
+	 	   parkings.division = req.body.division;	        
+		}
+		if (('null' != req.body.type) && (undefined != req.body.type)) {
+	    	parkings.type = req.body.type;
+	    }
+	    if (('null' != req.body.addr_road) && (undefined != req.body.addr_road)) {
+	    	parkings.addr_road = req.body.addr_road;
+	    }
+	  	if (('null' != req.body.addr_jibun) && (undefined != req.body.addr_jibun)) {
+	  		parkings.addr_jibun = req.body.addr_jibun;
+	  	}
+	  	if (('null' != req.body.total_p) && (undefined != req.body.total_p)) {
+	  		parkings.total_p = req.body.total_p;
+	  	}
+	  	if (('null' != req.body.feed) && (undefined != req.body.feed)) {
+	  		parkings.feed = req.body.feed;
+	  	}
+	  	if (('null' != req.body.buje) && (undefined != req.body.buje)) {
+	  		parkings.buje = req.body.buje;
+	  	}
+	  	if (('null' != req.body.op_date) && (undefined != req.body.op_date)) {
+	  		parkings.op_date = req.body.op_date;
+	  	}
+	  	if (('null' != req.body.w_op) && (undefined != req.body.w_op)) {
+	  		if (('null' != req.body.w_op.start_time) && (undefined != req.body.w_op.start_time)) {
+		  		parkings.w_op.start_time = req.body.w_op.start_time;
+		  	}
+		  	if (('null' != req.body.w_op.end_time) && (undefined != req.body.w_op.end_time)) {
+		  		parkings.w_op.end_time = req.body.w_op.end_time;
+		  	}
+	  	}	  	
+	  	if (('null' != req.body.s_op) && (undefined != req.body.s_op)) {
+		  	if (('null' != req.body.s_op.start_time) && (undefined != req.body.s_op.start_time)) {
+		  		parkings.s_op.start_time = req.body.s_op.start_time;
+		  	}
+		  	if (('null' != req.body.s_op.end_time) && (undefined != req.body.s_op.end_time)) {
+		  		parkings.s_op.end_time = req.body.s_op.end_time;
+		  	}
+		}
+		if (('null' != req.body.h_op) && (undefined != req.body.h_op)) {
+		  	if (('null' != req.body.h_op.start_time) && (undefined != req.body.h_op.start_time)) {
+		  		parkings.h_op.start_time = req.body.h_op.start_time;
+		  	}
+		  	if (('null' != req.body.h_op.end_time) && (undefined != req.body.h_op.end_time)) {
+		  		parkings.h_op.end_time = req.body.h_op.end_time;	  	
+		  	}
+		}
+	  	if (('null' != req.body.fee_info) && (undefined != req.body.fee_info)) {
+	  		parkings.fee_info = req.body.fee_info;
+	  	}
+	  	if (('null' != req.body.park_base) && (undefined != req.body.park_base)) {
+		  	if (('null' != req.body.park_base.time) && (undefined != req.body.park_base.time)) {
+		  		parkings.park_base.time = req.body.park_base.time;
+		  	}
+		  	if (('null' != req.body.park_base.fee) && (undefined != req.body.park_base.fee)) {
+		  		parkings.park_base.fee = req.body.park_base.fee;
+		  	}
+		}
+		if (('null' != req.body.add_term) && (undefined != req.body.add_term)) {
+		  	if (('null' != req.body.add_term.time) && (undefined != req.body.add_term.time)) {
+		  		parkings.add_term.time = req.body.add_term.time;
+		  	}
+		  	if (('null' != req.body.add_term.fee) && (undefined != req.body.add_term.fee)) {
+		  		parkings.add_term.fee = req.body.add_term.fee;
+		  	}
+		}
+		if (('null' != req.body.one_day_park) && (undefined != req.body.one_day_park)) {
+		  	if (('null' != req.body.one_day_park.time) && (undefined != req.body.one_day_park.time)) {
+		  		parkings.one_day_park.time = req.body.one_day_park.time;
+		  	}
+		  	if (('null' != req.body.one_day_park.fee) && (undefined != req.body.one_day_park.fee)) {
+		  		parkings.one_day_park.fee = req.body.one_day_park.fee;
+		  	}
+		}
+	  	if (('null' != req.body.month_fee) && (undefined != req.body.month_fee)) {
+	  		parkings.month_fee = req.body.month_fee;
+	  	}
+	  	if (('null' != req.body.payment) && (undefined != req.body.payment)) {
+	  		parkings.payment = req.body.payment;
+	  	}
+	  	if (('null' != req.body.remarks) && (undefined != req.body.remarks)) {
+	  		parkings.remarks = req.body.remarks;
+	  	}
+	  	if (('null' != req.body.manager) && (undefined != req.body.manager)) {
+	  		parkings.manager = req.body.manager;
+	  	}
+	  	if (('null' != req.body.tel) && (undefined != req.body.tel)) {
+	  		parkings.tel = req.body.tel;
+	  	}
+	  	if (('null' != req.body.lat) && (undefined != req.body.lat)) {
+	  		parkings.lat = req.body.lat;
+	  	}
+	  	if (('null' != req.body.lng) && (undefined != req.body.lng)) {
+	  		parkings.lng = req.body.lng;
+	  	}
+	  	if (('null' != req.body.data_date) && (undefined != req.body.data_date)) {
+	  		parkings.data_date = req.body.data_date;
+	  	}
+	  	if (('null' != req.body.homepage) && (undefined != req.body.homepage)) {
+	  		parkings.homepage = req.body.homepage;
+	  	}
+	  	if (('null' != req.body.park_space_count) && (undefined != req.body.park_space_count)) {
+		  	if (('null' != req.body.park_space_count.small) && (undefined != req.body.park_space_count.small)) {
+		  		parkings.park_space_count.small = req.body.park_space_count.small;
+		  	}
+		  	if (('null' != req.body.park_space_count.mid) && (undefined != req.body.park_space_count.mid)) {	  		
+		  		parkings.park_space_count.mid = req.body.park_space_count.mid;
+		  	}
+		  	if (('null' != req.body.park_space_count.big) && (undefined != req.body.park_space_count.big)) {
+		  		parkings.park_space_count.big = req.body.park_space_count.big;
+		  	}
+		  	if (('null' != req.body.park_space_count.elec) && (undefined != req.body.park_space_count.elec)) {
+		  		parkings.park_space_count.elec = req.body.park_space_count.elec;
+		  	}
+		  	if (('null' != req.body.park_space_count.hand) && (undefined != req.body.park_space_count.hand)) {
+		  		parkings.park_space_count.hand = req.body.park_space_count.hand;
+		  	}
+		}
+	  	if (('null' != req.body.sale_info) && (undefined != req.body.sale_info)) {
+	  		parkings.sale_info = req.body.sale_info;
+	  	}
+	  	if (('null' != req.body.display) && (undefined != req.body.display)) {
+	  		parkings.display = req.body.display;
+	  	}
+	  	
+	    parkings.save(function (error) {
+		    if (error) {
+		       	console.log(error)
+		    }
+		    res.send({
+		        success: true
+		    })
+	    })
+	})
 })
 
 /*

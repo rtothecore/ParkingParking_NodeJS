@@ -20,7 +20,11 @@
     "moment": "^2.22.2",
     "mongoose": "^5.1.0",
     "morgan": "^1.9.0",
+    "multer": "^1.4.1",
+    "node-geocoder": "^3.22.0",
     "nodemailer": "^4.6.8",
-    "nodemon": "^1.17.4"
+    "nodemon": "^1.17.4",
+    "path": "^0.12.7",
+    "xlsx": "^0.14.0"
   }
 }

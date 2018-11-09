@@ -79,7 +79,8 @@
             label="검색어"
             required
             outline 
-            v-if="setDisable()"></v-text-field>
+            v-if="setDisable()"
+            v-on:keyup="runSearch"></v-text-field>
         <v-select
           :items="SearchContentLevelItems"
           v-model="e3"
@@ -814,6 +815,11 @@ export default {
     },
     setDisable () {
       return this.searchContentDisabled
+    },
+    runSearch: function (e) {
+      if (e.keyCode === 13) {
+        this.searchUsers()
+      }
     }
   }
 }
