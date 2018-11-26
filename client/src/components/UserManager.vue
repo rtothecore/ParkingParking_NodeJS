@@ -115,7 +115,7 @@
       <v-flex v-if="$mq === 'laptop' || $mq === 'desktop'" md2 />
 
       <v-dialog v-model="dialog" max-width="500px">
-      <v-btn slot="activator" color="primary" dark class="mb-2">새 사용자</v-btn>
+      <v-btn v-if="userLevel === '1'" slot="activator" color="primary" dark class="mb-2">새 사용자</v-btn>
       <v-card color="white">
         <v-card-title>
           <span class="headline" style="color:black">{{ formTitle }}</span>
@@ -248,6 +248,7 @@
                   outline></v-text-field>
                 -->
                 <v-select
+                  v-if="userLevel === '1'"
                   v-validate="'required'"
                   :items="levelItems"
                   v-model="editedItem.level"
@@ -315,9 +316,11 @@
               <v-btn icon class="mx-0" @click="deleteItem(props.item)">
                 <v-icon color="pink">delete</v-icon>
               </v-btn>
+              <!--
               <v-btn icon class="mx-0" @click="leaveItem(props.item)">
                 <v-icon color="red">time_to_leave</v-icon>
               </v-btn>
+              -->
             </td>
           </template>
         </v-data-table>
@@ -339,6 +342,7 @@ export default {
   },
   data () {
     return {
+      userLevel: null,
       SearchContentLevelItems: [
           { text: '최고관리자', value: '1' },
           { text: '데이터관리자', value: '10' },
@@ -452,6 +456,7 @@ export default {
   },
   created () {
     this.userId = this.$session.get('userId')
+    this.userLevel = this.$session.get('userLevel')
     this.getAllUsers()
   },
   watch: {
@@ -725,6 +730,21 @@ export default {
           }
           this.updateUser()
           this.users.splice(this.editedIndex, 1)
+          switch (this.editedItem.level) {
+            case '1' :
+              this.editedItem.levelValue = '최고관리자'
+              break
+            case '10' :
+              this.editedItem.levelValue = '데이터관리자'
+              break
+            case '99' :
+              this.editedItem.levelValue = '일반사용자'
+              break
+            default :
+              break
+          }
+          this.$session.set('userLevel', this.editedItem.level)
+          this.userLevel = this.$session.get('userLevel')
           this.users.push(this.editedItem)
         } else {                      // 새 사용자 추가
           // 이메일 유효성 검사

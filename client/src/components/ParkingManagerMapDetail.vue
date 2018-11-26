@@ -128,8 +128,33 @@
     </v-card-text>
     <v-card-actions>
       <v-spacer></v-spacer>
+      <!--
       <v-btn v-if="1 == isDisplay" color="info" @click.native="setNoDisplay">비공개</v-btn>
       <v-btn v-else color="info" @click.native="setDisplay">공개</v-btn>
+      -->
+      <!--
+      <v-select
+          :items="displays"          
+          menu-props="auto"
+          label="공개여부"
+          hide-details
+          prepend-icon="map"
+          single-line
+          item-text="name"
+          item-value="value"
+          v-on:change="onChangeDisplay"
+          v-model="selectDisplay"          
+        ></v-select>
+      -->
+      <v-select
+          :items="displays"
+          v-model="parkingData.display"                  
+          label="공개여부"
+          prepend-icon="map"                 
+          item-text="name"
+          item-value="value"
+          v-on:change="onChangeDisplay"        
+        ></v-select>
       <v-btn color="success" @click.native="dialog = false">닫기</v-btn>
     </v-card-actions>
   </v-card>
@@ -148,7 +173,10 @@ export default {
       dialog: false,
       parkingData: {},
       active: null,
-      isDisplay: null
+      displays: [
+        { name: '공개', value: '1' },
+        { name: '비공개', value: '0' }
+      ]
     }
   },
   mounted () {
@@ -156,17 +184,15 @@ export default {
     bus.$on('dialogForDetail', function (value) {
       vm.dialog = true
       vm.parkingData = value
-      vm.isDisplay = value.display
-      // console.log(value)
     })
   },
   created () {
   },
   methods: {
-    async updateParkingWithDisplay () {
+    async updateParkingWithDisplay (displayVal) {
       const response = await ParkingService.updateParking({
         id: this.parkingData._id,
-        display: this.isDisplay
+        display: displayVal
       })
       console.log(response.data)
     },
@@ -179,14 +205,31 @@ export default {
     },
     setNoDisplay () {
       console.log('setNoDisplay')
-      this.isDisplay = 0
-      this.updateParkingWithDisplay()
-      this.updateReportStatus('2')
+      this.updateParkingWithDisplay('0')
+      var codePrefix = this.parkingData.no.substr(0, 1)
+      if (codePrefix === 'R') {
+        this.updateReportStatus('1')
+      }
     },
     setDisplay () {
       console.log('setDisplay')
-      this.isDisplay = 1
-      this.updateParkingWithDisplay()
+      this.updateParkingWithDisplay('1')
+      var codePrefix = this.parkingData.no.substr(0, 1)
+      if (codePrefix === 'R') {
+        this.updateReportStatus('2')
+      }
+    },
+    onChangeDisplay: function (event) {
+      switch (event) {
+        case '1' :
+          this.setDisplay()
+          break
+        case '0' :
+          this.setNoDisplay()
+          break
+        default :
+          break
+      }
     }
   }
 }

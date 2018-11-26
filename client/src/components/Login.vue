@@ -112,6 +112,7 @@ export default {
                   }).then((result) => {
                     this.$session.start()
                     this.$session.set('userId', response.data[0]._id)
+                    this.$session.set('userLevel', response.data[0].level)
                     this.$router.push('/')
                   })
                 } else {

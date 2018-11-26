@@ -61,6 +61,8 @@ var options = {
 };
 var geocoder = NodeGeocoder(options);
 
+var Distance = require('geo-distance');
+
 var http = require('http'),
 	fs = require('fs')
 
@@ -96,6 +98,60 @@ var User = require("../models/user")
 var JoinUser = require("../models/joinuser")
 var LeaveUser = require("../models/leaveuser")
 var Report = require("../models/report")
+var Favorite = require("../models/favorite")
+var Touch = require("../models/touch")
+var Notice = require("../models/notice")
+
+// CoolSMS START
+// https://www.coolsms.co.kr/about-messagev4
+const { config, Group } = require('coolsms-sdk-v4')
+
+// 인증을 위해 발급받은 본인의 API Key를 사용합니다.
+const apiKey = 'NCS6OOPSA8YAOVZY'
+const apiSecret = 'C1DZYWZODQWLCB2MHZUIS4ATG2JNGK6N'
+config.init({ apiKey, apiSecret })
+async function send (params = {}) {
+  try {
+    const response = await Group.sendSimpleMessage(params)
+    console.log(response)
+  } catch (e) {
+    console.log(e)
+  }
+}
+
+function getUserWithLevel() {
+	User.find({}, 'phone_no', function (error, result) {
+		if (error) { console.error(error); }
+		console.log(result)
+		return result;		
+ 	})
+  	.where('level').ne('99')  	
+}
+
+async function sendToManager2 (groupMessageVal) {
+	const group = new Group({ undefined, undefined })
+  	await group.createGroup() // groupId 가 없다면 필수로 작동 시켜야 됩니다.
+	await group.addGroupMessage(groupMessageVal)
+	console.log(await group.sendMessages()) // 정상적인 발송이라면 Success 라는 문구가 출력됩니다.
+}
+
+function sendToManager (textVal) {
+	// Level 1, 10인 사용자 검색
+	User.find({}, 'phone_no', function (error, result) {
+		if (error) { console.error(error); }		
+		var groupMessageVal = [];
+		for(var i = 0; i < result.length; i++) {
+			var message = {to: result[i].phone_no, from: '01032795690', text: textVal, type: 'SMS'};
+			groupMessageVal.push(message);
+		}
+		console.log(groupMessageVal);
+		sendToManager2(groupMessageVal);
+	})
+	.where('level').ne('99')
+}
+
+// sendToManager('Hello! World!');
+// CoolSMS END
 
 // https://www.zerocho.com/category/NodeJS/post/5950a6c4f7934c001894ea83
 app.post('/reportImg/upload', upload.single('img'), (req, res) => {
@@ -104,8 +160,11 @@ app.post('/reportImg/upload', upload.single('img'), (req, res) => {
 });
 
 function updateOrInsertParkingData(wsJsonData) {	 			
-	updateOrInsertData(wsJsonData);	
-	updateReport(wsJsonData.no, '1');
+	updateOrInsertData(wsJsonData);
+
+	if ("R" === wsJsonData.no.substring(0, 1)) {
+		updateReport(wsJsonData.no, '1');	// 제보 콜렉션 상태 : 승인중 으로 업데이트
+	}	
 }
 
 function updateReport(reportCode, statusVal) {
@@ -142,85 +201,182 @@ function updateParkingData(pzd, wsJsonData) {
 		pzd.division = wsJsonData.division
 	if(undefined != wsJsonData.type)
 		pzd.type = wsJsonData.type
-	if(undefined != wsJsonData.addr_road)
-		pzd.addr_road = wsJsonData.addr_road
-	if(undefined != wsJsonData.addr_jibun)
-		pzd.addr_jibun = wsJsonData.addr_jibun
-	if(undefined != wsJsonData.total_p)
-		pzd.total_p = wsJsonData.total_p
-	if(undefined != wsJsonData.feed)
-		pzd.feed = wsJsonData.feed
-	if(undefined != wsJsonData.buje)
-		pzd.buje = wsJsonData.buje
-	if(undefined != wsJsonData.op_date)
-		pzd.op_date = wsJsonData.op_date
-	if(undefined != wsJsonData.fee_info)
-		pzd.fee_info = wsJsonData.fee_info
-	if(undefined != wsJsonData.month_fee)
-		pzd.month_fee = wsJsonData.month_fee
-	if(undefined != wsJsonData.payment)
-		pzd.payment = wsJsonData.payment
-	if(undefined != wsJsonData.remarks)
-		pzd.remarks = wsJsonData.remarks
-	if(undefined != wsJsonData.manager)
-		pzd.manager = wsJsonData.manager
-	if(undefined != wsJsonData.tel)
-		pzd.tel = wsJsonData.tel
-	if(undefined != wsJsonData.lat)
-		pzd.lat = wsJsonData.lat
-	if(undefined != wsJsonData.lng)
-		pzd.lng = wsJsonData.lng
-	if(undefined != wsJsonData.data_date)
-		pzd.data_date = wsJsonData.data_date
-	if(undefined != wsJsonData.homepage)
-		pzd.homepage = wsJsonData.homepage
-	if(undefined != wsJsonData.sale_info)
-		pzd.sale_info = wsJsonData.sale_info
-	if(undefined != wsJsonData.display)
-		pzd.display = wsJsonData.display
 
-	if(undefined != wsJsonData.w_op_start_time) {		
-		pzd.w_op.start_time = wsJsonData.w_op_start_time
-		pzd.w_op.end_time = wsJsonData.w_op_end_time
-	}
+	if(undefined != wsJsonData.addr_road) {
+		if(pzd.addr_road != wsJsonData.addr_road) {	// DB의 기존 주소와 업로드한 Excel의 주소가 다를 경우 GPS를 다시 입력한다.
+			console.log('addr_road is different!')
+			geocoder.geocode(wsJsonData.addr_road, function(err, res) {
+    			wsJsonData.lat = res[0].latitude;
+    			wsJsonData.lng = res[0].longitude;
+    			
+    			console.log('geocode complete!')
 
-	if(undefined != wsJsonData.s_op_start_time) {		
-		pzd.s_op.start_time = wsJsonData.s_op_start_time
-		pzd.s_op.end_time = wsJsonData.s_op_end_time
-	}
+    			pzd.addr_road = wsJsonData.addr_road
 
-	if(undefined != wsJsonData.h_op_start_time) {		
-		pzd.h_op.start_time = wsJsonData.h_op_start_time
-		pzd.h_op.end_time = wsJsonData.h_op_end_time
-	}
+    			if(undefined != wsJsonData.addr_jibun)
+					pzd.addr_jibun = wsJsonData.addr_jibun
 
-	if(undefined != wsJsonData.park_base_time) {			
-		pzd.park_base.time = wsJsonData.park_base_time
-		pzd.park_base.fee = wsJsonData.park_base_fee
-	}
+				if(undefined != wsJsonData.total_p)
+					pzd.total_p = wsJsonData.total_p
+				if(undefined != wsJsonData.feed)
+					pzd.feed = wsJsonData.feed
+				if(undefined != wsJsonData.buje)
+					pzd.buje = wsJsonData.buje
+				if(undefined != wsJsonData.op_date)
+					pzd.op_date = wsJsonData.op_date
+				if(undefined != wsJsonData.fee_info)
+					pzd.fee_info = wsJsonData.fee_info
+				if(undefined != wsJsonData.month_fee)
+					pzd.month_fee = wsJsonData.month_fee
+				if(undefined != wsJsonData.payment)
+					pzd.payment = wsJsonData.payment
+				if(undefined != wsJsonData.remarks)
+					pzd.remarks = wsJsonData.remarks
+				if(undefined != wsJsonData.manager)
+					pzd.manager = wsJsonData.manager
+				if(undefined != wsJsonData.tel)
+					pzd.tel = wsJsonData.tel
+				if(undefined != wsJsonData.lat)
+					pzd.lat = wsJsonData.lat
+				if(undefined != wsJsonData.lng)
+					pzd.lng = wsJsonData.lng
+				if(undefined != wsJsonData.data_date)
+					pzd.data_date = wsJsonData.data_date
+				if(undefined != wsJsonData.homepage)
+					pzd.homepage = wsJsonData.homepage
+				if(undefined != wsJsonData.sale_info)
+					pzd.sale_info = wsJsonData.sale_info
+				if(undefined != wsJsonData.display)
+					pzd.display = wsJsonData.display
 
-	if(undefined != wsJsonData.add_term_time) {		
-		pzd.add_term.time = wsJsonData.add_term_time
-		pzd.add_term.fee = wsJsonData.add_term_fee	
-	}
+				if(undefined != wsJsonData.w_op_start_time) {		
+					pzd.w_op.start_time = wsJsonData.w_op_start_time
+					pzd.w_op.end_time = wsJsonData.w_op_end_time
+				}
 
-	if(undefined != wsJsonData.one_day_park_time) {		
-		pzd.one_day_park.time = wsJsonData.one_day_park_time
-		pzd.one_day_park.fee = wsJsonData.one_day_park_fee
-	}
+				if(undefined != wsJsonData.s_op_start_time) {		
+					pzd.s_op.start_time = wsJsonData.s_op_start_time
+					pzd.s_op.end_time = wsJsonData.s_op_end_time
+				}
 
-	if(undefined != wsJsonData.park_space_count_small) {		
-		pzd.park_space_count.small = wsJsonData.park_space_count_small
-		pzd.park_space_count.mid = wsJsonData.park_space_count_mid
-		pzd.park_space_count.big = wsJsonData.park_space_count_big
-		pzd.park_space_count.elec = wsJsonData.park_space_count_elec
-		pzd.park_space_count.hand = wsJsonData.park_space_count_hand
-	}
+				if(undefined != wsJsonData.h_op_start_time) {		
+					pzd.h_op.start_time = wsJsonData.h_op_start_time
+					pzd.h_op.end_time = wsJsonData.h_op_end_time
+				}
 
-	pzd.save(function (error) {
-		if (error) { console.log(error) }
-		console.log('Updated!')
-	})
+				if(undefined != wsJsonData.park_base_time) {			
+					pzd.park_base.time = wsJsonData.park_base_time
+					pzd.park_base.fee = wsJsonData.park_base_fee
+				}
+
+				if(undefined != wsJsonData.add_term_time) {		
+					pzd.add_term.time = wsJsonData.add_term_time
+					pzd.add_term.fee = wsJsonData.add_term_fee	
+				}
+
+				if(undefined != wsJsonData.one_day_park_time) {		
+					pzd.one_day_park.time = wsJsonData.one_day_park_time
+					pzd.one_day_park.fee = wsJsonData.one_day_park_fee
+				}
+
+				if(undefined != wsJsonData.park_space_count_small) {		
+					pzd.park_space_count.small = wsJsonData.park_space_count_small
+					pzd.park_space_count.mid = wsJsonData.park_space_count_mid
+					pzd.park_space_count.big = wsJsonData.park_space_count_big
+					pzd.park_space_count.elec = wsJsonData.park_space_count_elec
+					pzd.park_space_count.hand = wsJsonData.park_space_count_hand
+				}
+
+				console.log(pzd)
+				pzd.save(function (error) {
+					if (error) { console.log(error) }
+					console.log('Updated!')
+				})     			    			
+    		});
+		} else {
+			pzd.addr_road = wsJsonData.addr_road
+
+			if(undefined != wsJsonData.addr_jibun)
+				pzd.addr_jibun = wsJsonData.addr_jibun
+
+			if(undefined != wsJsonData.total_p)
+				pzd.total_p = wsJsonData.total_p
+			if(undefined != wsJsonData.feed)
+				pzd.feed = wsJsonData.feed
+			if(undefined != wsJsonData.buje)
+				pzd.buje = wsJsonData.buje
+			if(undefined != wsJsonData.op_date)
+				pzd.op_date = wsJsonData.op_date
+			if(undefined != wsJsonData.fee_info)
+				pzd.fee_info = wsJsonData.fee_info
+			if(undefined != wsJsonData.month_fee)
+				pzd.month_fee = wsJsonData.month_fee
+			if(undefined != wsJsonData.payment)
+				pzd.payment = wsJsonData.payment
+			if(undefined != wsJsonData.remarks)
+				pzd.remarks = wsJsonData.remarks
+			if(undefined != wsJsonData.manager)
+				pzd.manager = wsJsonData.manager
+			if(undefined != wsJsonData.tel)
+				pzd.tel = wsJsonData.tel
+			if(undefined != wsJsonData.lat)
+				pzd.lat = wsJsonData.lat
+			if(undefined != wsJsonData.lng)
+				pzd.lng = wsJsonData.lng
+			if(undefined != wsJsonData.data_date)
+				pzd.data_date = wsJsonData.data_date
+			if(undefined != wsJsonData.homepage)
+				pzd.homepage = wsJsonData.homepage
+			if(undefined != wsJsonData.sale_info)
+				pzd.sale_info = wsJsonData.sale_info
+			if(undefined != wsJsonData.display)
+				pzd.display = wsJsonData.display
+
+			if(undefined != wsJsonData.w_op_start_time) {		
+				pzd.w_op.start_time = wsJsonData.w_op_start_time
+				pzd.w_op.end_time = wsJsonData.w_op_end_time
+			}
+
+			if(undefined != wsJsonData.s_op_start_time) {		
+				pzd.s_op.start_time = wsJsonData.s_op_start_time
+				pzd.s_op.end_time = wsJsonData.s_op_end_time
+			}
+
+			if(undefined != wsJsonData.h_op_start_time) {		
+				pzd.h_op.start_time = wsJsonData.h_op_start_time
+				pzd.h_op.end_time = wsJsonData.h_op_end_time
+			}
+
+			if(undefined != wsJsonData.park_base_time) {			
+				pzd.park_base.time = wsJsonData.park_base_time
+				pzd.park_base.fee = wsJsonData.park_base_fee
+			}
+
+			if(undefined != wsJsonData.add_term_time) {		
+				pzd.add_term.time = wsJsonData.add_term_time
+				pzd.add_term.fee = wsJsonData.add_term_fee	
+			}
+
+			if(undefined != wsJsonData.one_day_park_time) {		
+				pzd.one_day_park.time = wsJsonData.one_day_park_time
+				pzd.one_day_park.fee = wsJsonData.one_day_park_fee
+			}
+
+			if(undefined != wsJsonData.park_space_count_small) {		
+				pzd.park_space_count.small = wsJsonData.park_space_count_small
+				pzd.park_space_count.mid = wsJsonData.park_space_count_mid
+				pzd.park_space_count.big = wsJsonData.park_space_count_big
+				pzd.park_space_count.elec = wsJsonData.park_space_count_elec
+				pzd.park_space_count.hand = wsJsonData.park_space_count_hand
+			}
+
+			console.log(pzd)
+			pzd.save(function (error) {
+				if (error) { console.log(error) }
+				console.log('Updated!')
+			}) 
+		}		
+	}	
 }
 
 function insertParkingData(wsJsonData) {
@@ -473,6 +629,52 @@ app.get('/getAuthCode/:phone_no', (req, res) => {
 	}).where('phone_no').equals(req.params.phone_no)
 })
 
+// Add new smsauth
+app.post('/addNewSMSAuth', (req, res) => {
+	console.log(req.body);
+  	var phone_no = req.body.phone_no;
+  	var auth_code = Math.floor(1000 + Math.random() * 9000);
+  	var auth_date = getNowDate();
+
+  	var new_sms_auth = new SmsAuth({
+    	phone_no: phone_no,
+    	auth_code: auth_code,
+    	auth_date: auth_date
+  	})
+  
+  	new_sms_auth.save(function (error, result) {
+  		if (error) { console.log(error) }
+
+  		const smsParams = {
+		  text: '[' + auth_code + ']인증번호를 이지파킹에서 보내드립니다!',
+		  type: 'SMS', // 발송할 메시지 타입 (SMS, LMS, MMS, ATA, CTA)
+		  to: phone_no, // 수신번호 (받는이)
+		  from: '01032795690' // 발신번호 (보내는이)
+		}
+		send(smsParams);
+
+    	res.send({
+	      	success: true,
+	      	message: 'SmsAuth saved successfully!',
+	      	result: result
+    	})
+  	})
+})
+
+// Delete smsauth
+app.delete('/deleteSMSAuth/:phoneNo', (req, res) => {
+	SmsAuth.remove({
+		phone_no: req.params.phoneNo
+	}, function(err, lands) {
+		if (err) {
+			res.send(err)
+		}
+		res.send({
+			success: true
+		})
+	})
+})
+
 function leadingZeros(n, digits) {
   var zero = '';
   n = n.toString();
@@ -594,6 +796,15 @@ app.get('/getAllUser', (req, res) => {
 	})
 })
 
+// fetch user with email
+app.get('/getUser/:email', (req, res) => {
+	User.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	})
+	.where('email').equals(req.params.email)
+})
+
 // Update user
 app.put('/updateUser/:id', (req, res) => {
   	// console.log(req.body)
@@ -622,6 +833,42 @@ app.put('/updateUser/:id', (req, res) => {
 	    })
 	})
 })
+
+// Update user with car no
+app.put('/updateUserWithCarNo/:email', (req, res) => {
+  	// console.log(req.body)
+  	User.find({}, '', function (error, users) {
+    	if (error) { console.error(error); }
+	    users[0].car_no = req.body.car_no;
+	    users[0].save(function (error) {
+		    if (error) {
+		       	console.log(error)
+		    }
+		    res.send({
+		        success: true
+		    })
+	    })
+	})
+	.where('email').equals(req.params.email)
+})
+
+// Update user with car type
+app.put('/updateUserWithCarType/:email', (req, res) => {  	
+  	User.find({}, '', function (error, users) {
+    	if (error) { console.error(error); }
+	    users[0].car_type = req.body.car_type;
+	    users[0].save(function (error) {
+		    if (error) {
+		       	console.log(error)
+		    }
+		    res.send({
+		        success: true
+		    })
+	    })
+	})
+	.where('email').equals(req.params.email)
+})
+
 
 // Delete user
 app.delete('/deleteUser/:id', (req, res) => {
@@ -672,6 +919,45 @@ app.delete('/leaveUser/:id', (req, res) => {
 	    })
     })
 })
+
+// Leave user with email, leave reason
+app.delete('/leaveUserWithEmail/:email', (req, res) => {
+	// console.log(req.body)
+	// 1. Find user with id
+	User.find({}, '', function (error, users) {
+    	if (error) { console.error(error); }
+    	    	
+    	// 2. Insert user to LeaveUser
+    	var leave_user = new LeaveUser({
+	    	name: users[0].name,
+	    	email: users[0].email,
+	    	phone_no: users[0].phone_no,
+	    	car_no: users[0].car_no,
+	    	car_type: users[0].car_type,	    	
+	    	leave_date: getNowDate(),
+	    	leave_reason: req.body.leave_reason
+	    })
+	    
+	    leave_user.save(function (error, result) {
+	    	if (error) {
+	    		console.error(error);
+	    	}
+
+	    	// 3. Delete user with email
+	    	User.remove({
+				email: req.params.email
+			}, function(err, lands) {
+				if (err) {
+					res.send(err)
+				}
+				res.send({
+					success: true
+				})
+			})
+	    })
+    }).where('email').equals(req.params.email)
+})
+
 
 // Fetch email
 app.get('/getDuplicatedEmail/:email', (req, res) => {
@@ -995,6 +1281,7 @@ app.post('/addNewReport', (req, res) => {
     if (error) {
     	console.log(error)
     }
+	sendToManager('[' + code + ']새로운 제보를 받았습니다!');
     res.send({
     	success: true,
 	    message: 'Report saved successfully!',
@@ -1009,6 +1296,14 @@ app.get('/getAllReport', (req, res) => {
 		if (error) { console.error(error); }
 	    res.send(result)
 	})
+})
+
+// Fetch report datas with user email
+app.get('/getReports/:email', (req, res) => {
+	Report.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	}).where('user_email').equals(req.params.email)
 })
 
 // Fetch reports by date, searchType, searchContent
@@ -1070,7 +1365,7 @@ app.get('/getParkingWithDisplay/:display', (req, res) => {
 
 // Fetch parkings by date, searchType, searchContent
 app.get('/parkings/searchBy4/:startDate/:endDate/:searchType/:searchContent', (req, res) => {
-  console.log(req.params)
+  // console.log(req.params)
   var query = ParkingZoneData.find({})
   
   if('null' == req.params.startDate || 'undefined' == req.params.startDate) {  	  	
@@ -1101,7 +1396,26 @@ app.get('/parkings/searchBy4/:startDate/:endDate/:searchType/:searchContent', (r
   }
 
   query.exec().then(result => {
-  	console.log(result)
+  	// console.log(result)
+  	res.send(result)
+  })
+})
+
+// Fetch parkings by display, searchContent
+app.get('/parkings/searchBy2/:display/:searchContent', (req, res) => {
+  // console.log(req.params)
+  var query = ParkingZoneData.find({})
+  
+  if((2 != req.params.display)) {	// 0: 비공개, 1: 공개, 2: 검색안함
+  	query.where('display').equals(req.params.display)
+  }
+
+  if((0 != req.params.searchContent)) {
+  	query.where('name').regex(req.params.searchContent)
+  }
+
+  query.exec().then(result => {
+  	// console.log(result)
   	res.send(result)
   })
 })
@@ -1121,10 +1435,81 @@ app.delete('/deleteParking/:id', (req, res) => {
 	})	
 })
 
+// Delete report
+app.delete('/deleteReport/:code', (req, res) => {
+	console.log(req.params.id)		
+	Report.remove({
+		code: req.params.code
+	}, function(err, lands) {
+		if (err) {
+			res.send(err)
+		}
+		res.send({
+			success: true
+		})
+	})		
+})
+
 // Update report with status
 app.put('/updateReport', (req, res) => {
 	updateReport(req.body.code, req.body.status);
 	res.status(200).json([{error: "Report status updated successfully"}]);	
+})
+
+// Update report with status = '3', holdReason
+app.put('/updateReportWithHoldreason', (req, res) => {
+	// console.log(req.body)
+	Report.find({}, '', function (error, reports) {
+		if (error) { console.error(error); }		
+		reports[0].status = req.body.status
+		reports[0].hold_reason = req.body.hold_reason
+		reports[0].save(function (error) {
+			if (error) { console.log(error) }
+			console.log('Report collection updated!')
+			res.status(200).json([{error: "Report status, hold_reason updated successfully"}]);	
+		})		
+	})
+	.where('code').equals(req.body.code)
+})
+
+// Update report with data
+app.put('/updateReportWithData', (req, res) => {
+	// console.log(req.body)
+	Report.find({}, '', function (error, reports) {
+		if (error) { console.error(error); }
+		reports[0].parking_name = req.body.parking_name;
+		reports[0].parking_tel = req.body.parking_tel;
+		reports[0].parking_fee_info = req.body.parking_fee_info;
+		reports[0].parking_etc_info = req.body.parking_etc_info;
+		reports[0].parking_pictureA = req.body.parking_pictureA;
+		reports[0].parking_pictureB = req.body.parking_pictureB;
+		reports[0].parking_pictureC = req.body.parking_pictureC;
+		reports[0].status = '0';		
+		reports[0].save(function (error) {
+			if (error) { console.log(error) }
+			console.log('Report collection updated!')
+			sendToManager('[' + req.body.code + ']제보가 수정되었습니다!');
+			res.status(200).json([{error: "Report data updated successfully"}]);	
+		})		
+	})
+	.where('code').equals(req.body.code)
+})
+
+// Update report with delete reason
+app.put('/updateReportWithDelReason', (req, res) => {
+	// console.log(req.body)
+	Report.find({}, '', function (error, reports) {
+		if (error) { console.error(error); }		
+		reports[0].delete_status = '1'
+		reports[0].delete_reason = req.body.delete_reason
+		reports[0].save(function (error) {
+			if (error) { console.log(error) }
+			console.log('Report collection updated!')
+			sendToManager('[' + req.body.code + ']제보가 삭제 요청되었습니다!');
+			res.status(200).json([{error: "Report status, delete_reason updated successfully"}]);	
+		})		
+	})
+	.where('code').equals(req.body.code)
 })
 
 // Update parking
@@ -1271,6 +1656,200 @@ app.put('/updateParking/:id', (req, res) => {
 		    })
 	    })
 	})
+})
+
+// Fetch data of favorites with email
+app.get('/getFavoritesWithEmail/:email', (req, res) => {
+	Favorite.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	})
+	.where('user_email').equals(req.params.email)
+})
+
+// Fetch data of favorites with no
+app.get('/getFavoriteWithEmailNNo/:email/:no', (req, res) => {
+	Favorite.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	})
+	.where('user_email').equals(req.params.email)
+	.where('parking_no').equals(req.params.no)
+})
+
+// Add new favorite
+app.post('/addNewFavorite', (req, res) => {
+  console.log(req.body);
+  var user_email = req.body.email;
+  var parking_no = req.body.parking_no;
+  var date = getNowDate();    
+
+  var new_favorite = new Favorite({
+    user_email: user_email,
+    parking_no: parking_no,
+    date: date    
+  })
+
+  new_favorite.save(function (error, result) {
+    if (error) {
+    	console.log(error)
+    }
+    res.send({
+    	success: true,
+	    message: 'Favorite saved successfully!',
+	    result: result
+	})
+  })
+})
+
+// Delete favorite
+app.delete('/deleteFavorite/:email', (req, res) => {
+	console.log(req.body)		
+	Favorite.remove({
+		user_email: req.params.email,
+		parking_no: req.body.parkingNo
+	}, function(err, lands) {
+		if (err) {
+			res.send(err)
+		}
+		res.send({
+			success: true
+		})
+	})		
+})
+
+// Fetch data of touches
+app.get('/getTouchs/', (req, res) => {
+	Touch.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	})	
+})
+
+// Insert or Update touch data
+app.post('/touch', (req, res) => { 
+	// console.log(req.body);  
+  	var parking_no = req.body.parking_no;  
+  	updateOrInsertTouch(parking_no)
+  	res.status(200).json([{error: "Touched successfully"}]);
+})
+
+// Insert or Update touch
+function updateOrInsertTouch(parking_no) {	
+	Touch.find({}, '', function (error, touch) {
+	    if (error) { console.error(error); }		    	    
+	    
+	    if (0 < touch.length) {
+	    	console.log('Touch data exists! - update');	    	
+			var touchCount = touch[0].touch_count;
+			touchCount = (touchCount * 1) + 1;
+	    	updateTouchData(touch[0], touchCount);	    	
+	    } else {
+	    	console.log('Touch data no exists! - insert')	    	 	
+	    	insertTouchData(parking_no)
+	    }	    	    
+	})
+	.where('parking_no').equals(parking_no)
+}
+
+function updateTouchData(touch, touchCount) {
+	touch.touch_count = touchCount;	
+	touch.last_touch_date = getNowDate();
+
+	touch.save(function (error) {
+		if (error) { console.log(error) }
+		console.log('Touch updated!')
+	})
+}
+
+function insertTouchData(parking_no) {
+	var nowDate = getNowDate();
+
+	var new_touch = new Touch({
+  		parking_no: parking_no,
+		touch_count: "1",
+		last_touch_date: nowDate
+  	})
+
+  	new_touch.save(function (error, result) {
+    	if (error) {
+      		console.log(error)
+    	}
+    	console.log('New touch inserted!')
+  	})
+}
+
+// Add new notice
+app.post('/addNewNotice', (req, res) => {
+  console.log(req.body);
+  var subject = req.body.subject;
+  var contents = req.body.contents;
+  var date = getNowDate();    
+
+  var new_notice = new Notice({
+    subject: subject,
+    contents: contents,
+    date: date    
+  })
+
+  new_notice.save(function (error, result) {
+    if (error) {
+    	console.log(error)
+    }
+    res.send({
+    	success: true,
+	    message: 'Notice saved successfully!',
+	    result: result
+	})
+  })
+})
+
+// Fetch data of notices
+app.get('/getAllNotices', (req, res) => {
+	Notice.find({}, '', function (error, result) {
+		if (error) { console.error(error); }
+	    res.send(result)
+	})	
+})
+
+// Update notice
+app.put('/updateNotice/:id', (req, res) => {
+  	console.log(req.body)
+  	Notice.findById(req.params.id, '', function (error, notices) {
+    	if (error) { console.error(error); }
+
+		if (('null' != req.body.subject) && (undefined != req.body.subject)) {
+			notices.subject = req.body.subject;		
+		}
+	    if (('null' != req.body.contents) && (undefined != req.body.contents)) {
+	 	   notices.contents = req.body.contents;	        
+		}
+		notices.date = getNowDate();
+			  
+	    notices.save(function (error) {
+		    if (error) {
+		       	console.log(error)
+		    }
+		    res.send({
+		        success: true
+		    })
+	    })
+	})
+})
+
+// Delete notice
+app.delete('/deleteNotice/:id', (req, res) => {
+	console.log(req.body)	
+	Notice.remove({
+		_id: req.params.id,		
+	}, function(err, lands) {
+		if (err) {
+			res.send(err)
+		}
+		res.send({
+			success: true
+		})
+	})		
 })
 
 /*

@@ -9,7 +9,17 @@
       <v-flex xs6 sm6 md4/>
 
       <v-flex xs6 sm6 md2>        
-        <v-switch :label="`공개여부: ${switch1.toString()}`" v-model="switch1" @click="switchDisplay"></v-switch>        
+        <v-select
+          :items="displays"          
+          menu-props="auto"
+          label="공개여부"
+          hide-details
+          prepend-icon="map"
+          single-line
+          item-text="name"
+          item-value="value"
+          v-on:change="onChangeDisplay"         
+        ></v-select>
       </v-flex>
 
       <v-flex xs4 sm4 md2>
@@ -104,18 +114,23 @@ export default {
   components: {VueDaumMap: VueDaumMap},
   data () {
     return {
+      displayValue: 2,
       markers: [],
       isSetCenter: 0,
       dialog: false,
-      appKey: '18224044621f2ce03db4a65d7418f518',
+      appKey: '58343c64a8d8186ec025571087316836',
       center: {lat: 33.4577073003335, lng: 126.58962232346863},
       level: 8,
       mapTypeId: VueDaumMap.MapTypeId.NORMAL,
       libraries: [],
       mapObject: null,
       parkings: [],
-      switch1: false,
-      searchContent: null
+      searchContent: null,
+      displays: [
+        { name: '전체', value: 2 },
+        { name: '공개', value: 1 },
+        { name: '비공개', value: 0 }
+      ]
     }
   },
   mounted () {
@@ -141,21 +156,13 @@ export default {
       this.parkings = response.data
       this.displayMarkers(this.parkings)
     },
-    async getParkingsWithDisplay (displayVal) {
-      const response = await ParkingService.fetchParkingWithDisplay({
-        display: displayVal
-      })
-      this.parkings = response.data
-      this.displayMarkers(this.parkings)
-    },
-    async getParkingsBy4 () {
-      var tmpSearchType = 'byParkingName'
+    async getParkingsBy2 () {
       var tmpSearchContent = this.searchContent
       if (!tmpSearchContent) {
         tmpSearchContent = 0
       }
-      const response = await ParkingService.fetchParkingsBy4({
-        searchType: tmpSearchType,
+      const response = await ParkingService.fetchParkingsBy2({
+        display: this.displayValue,
         searchContent: tmpSearchContent
       })
       this.parkings = response.data
@@ -210,11 +217,19 @@ export default {
       this.setMarkers(null)
       this.markers = []
     },
-    switchDisplay () {
-      if (this.switch1) { // true => false
-        this.getParkingsWithDisplay('0')
-      } else {            // false => true
-        this.getParkingsWithDisplay('1')
+    onChangeDisplay: function (event) {
+      switch (event) {
+        case 2 :
+          this.displayValue = '2'
+          break
+        case 1 :
+          this.displayValue = '1'
+          break
+        case 0 :
+          this.displayValue = '0'
+          break
+        default :
+          break
       }
     },
     runSearch: function (e) {
@@ -223,7 +238,7 @@ export default {
       }
     },
     searchParkings () {
-      this.getParkingsBy4()
+      this.getParkingsBy2()
     },
     searchReset () {
       this.searchContent = ''

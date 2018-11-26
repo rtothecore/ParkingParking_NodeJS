@@ -7,7 +7,8 @@ var LeaveUserSchema = new Schema({
 	phone_no: String,
 	car_no: String,
 	car_type: String,
-	leave_date: String
+	leave_date: String,
+	leave_reason: String
 })
 
 var LeaveUser = mongoose.model("LeaveUser", LeaveUserSchema)

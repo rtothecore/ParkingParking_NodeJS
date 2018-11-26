@@ -134,7 +134,7 @@
             <v-toolbar-title>{{ formTitle }}</v-toolbar-title>
             <v-spacer></v-spacer>
             <v-toolbar-items>
-              <v-btn dark flat @click.native="dialog = false">저장</v-btn>
+              <v-btn dark flat @click.native="save">저장</v-btn>
             </v-toolbar-items>
           </v-toolbar>
 
@@ -239,6 +239,7 @@
                   item-text="text"
                   item-value="value"
                   v-on:change="onChangeReportStatus"
+                  :disabled="checkReportStatus()"
                 ></v-select>
               </v-flex>
             </v-list-tile>
@@ -257,6 +258,19 @@
               </v-list-tile-content>
             </v-list-tile>
 
+          </v-list>
+          <v-divider></v-divider>
+
+          <v-list v-if="editedItem.delete_status === '1'" three-line subheader>
+            <v-subheader>삭제 요청</v-subheader>
+            <v-list-tile avatar>
+              <v-list-tile-content>
+                <v-list-tile-title>삭제사유</v-list-tile-title>
+                <v-list-tile-sub-title>{{ editedItem.delete_reason }}
+                  <v-btn color="error" @click.native="deleteReport">삭제</v-btn>
+                </v-list-tile-sub-title>
+              </v-list-tile-content>
+            </v-list-tile>            
           </v-list>
           <v-divider></v-divider>
 
@@ -296,14 +310,17 @@
             <td class="text-xs-left">{{ props.item.user_email }}</td>
             <td class="text-xs-left">{{ props.item.user_phone_no }}</td>
             <td class="text-xs-left">{{ props.item.report_date }}</td>
-            <td class="text-xs-left">{{ props.item.statusValue }}</td>            
+            <td class="text-xs-left">{{ props.item.statusValue }}</td>                                 
             <td class="justify-center layout px-0">
               <v-btn icon class="mx-0" @click="editItem(props.item)">
                 <v-icon color="teal">edit</v-icon>
               </v-btn>
+              <!--
               <v-btn icon class="mx-0" @click="deleteItem(props.item)">
                 <v-icon color="pink">delete</v-icon>
-              </v-btn>              
+              </v-btn>
+              -->
+              <h4 v-if="props.item.delete_status === '1'" class="mt-3">삭제요청</h4>
             </td>
           </template>
         </v-data-table>
@@ -383,9 +400,9 @@ export default {
         },
         { text: '주차장명', value: 'parking_name', align: 'left', width: '15%' },
         { text: '제보자', value: 'user_email', align: 'left', width: '15%' },
-        { text: '제보자 연락처', value: 'user_phone_no', align: 'left', width: '15%' },
-        { text: '제보일', value: 'report_date', align: 'left', width: '15%' },
-        { text: '상태', value: 'status', align: 'left', width: '10%' },
+        { text: '제보자 연락처', value: 'user_phone_no', align: 'left', width: '10%' },
+        { text: '제보일', value: 'report_date', align: 'left', width: '12%' },
+        { text: '상태', value: 'status', align: 'left', width: '5%' },
         { text: '관리', value: 'manage', sortable: false, align: 'left', width: '5%' }
       ],
       editedIndex: -1,
@@ -403,7 +420,9 @@ export default {
         parking_pictureA: '',
         parking_pictureB: '',
         parking_pictureC: '',
-        status: ''
+        status: '',
+        delete_status: '',
+        delete_reason: ''
       },
       reports: [],
       dictionary: {
@@ -481,6 +500,20 @@ export default {
             this.reports[i].statusValue = '보류'
             break
         }
+        switch (this.reports[i].delete_status) {
+          case '0' :
+            this.reports[i].deleteStatusValue = '삭제요청없음'
+            break
+          case '1' :
+            this.reports[i].deleteStatusValue = '삭제요청'
+            break
+          case '2' :
+            this.reports[i].deleteStatusValue = '삭제완료'
+            break
+          case '3' :
+            this.reports[i].deleteStatusValue = '삭제보류'
+            break
+        }
       }
     },
     async getReportsBy4 () {
@@ -517,6 +550,20 @@ export default {
         }
       }
     },
+    async updateReportStatus (statusVal) {
+      const response = await ReportService.updateReportWithHoldreason({
+        code: this.reports[this.editedIndex].code,
+        status: statusVal,
+        hold_reason: this.holdReason
+      })
+      console.log(response.data)
+    },
+    async deleteReportWithCode () {
+      const response = await ReportService.deleteReport({
+        code: this.reports[this.editedIndex].code
+      })
+      console.log(response.data)
+    },
     searchReports () {
       this.loader = 'loading'
       this.getReportsBy4()
@@ -537,6 +584,11 @@ export default {
       }
       this.gpsData.lat = this.editedItem.parking_lat
       this.gpsData.lng = this.editedItem.parking_lng
+      this.ReportStatusItems = [{ text: '접수', value: '0' }, { text: '승인중', value: '1' }, { text: '승인', value: '2' }, { text: '보류', value: '3' }]
+      this.holdReasonDisabled = false
+      if (this.editedItem.status === '0') {
+        this.ReportStatusItems.splice(1, 2)
+      }
     },
     setHoldReasonDisable () {
       return this.holdReasonDisabled
@@ -577,143 +629,32 @@ export default {
       this.searchReports()
     },
     onChangeReportStatus: function (event) {
-      console.log(event)
+      // console.log(event)
       if (event === '3') {
         this.holdReasonDisabled = true
       } else {
         this.holdReasonDisabled = false
       }
-      // this.selectedSearchType = event
     },
     onChangeSearchContentStatus: function (event) {
       this.searchContent = event
-    }
-    /*
-    async updateUser () {
-      await UserService.updateUser({
-        id: this.editedItem._id,
-        name: this.editedItem.name,
-        email: this.editedItem.email,
-        password: this.editedItem.password,
-        phone_no: this.editedItem.phone_no,
-        car_no: this.editedItem.car_no,
-        car_type: this.editedItem.car_type,
-        level: this.editedItem.level
-      })
     },
-    async deleteUser (id) {
-      await UserService.deleteUser(id)
+    save () {
+      this.updateReportStatus(this.editedItem.status)
+      this.dialog = false
     },
-    async leaveUser (id) {
-      await UserService.leaveUser(id)
-    },
-    async createNewUser () {
-      await UserService.createNewUser({
-        name: this.editedItem.name,
-        email: this.editedItem.email,
-        password: this.editedItem.password,
-        phone_no: this.editedItem.phone_no,
-        car_no: this.editedItem.car_no,
-        car_type: this.editedItem.car_type,
-        level: this.editedItem.level
-      })
-    },
-    async checkDuplicatedEmail (email) {
-      const response = await UserService.checkDupllicatedUserEmail(email)
-      if (response.data.length === 0) {
-        this.$swal(
-          '사용 가능한 이메일입니다',
-          '유효한 이메일이 확인되었습니다',
-          'success'
-        )
-        this.isValidEmail = true
+    checkReportStatus () {
+      // if (this.editedItem.status === '0' || this.editedItem.status === '3') {   // '접수', '보류'상태인 것만 상태수정 가능
+      if (this.editedItem.status === '0') {   // '접수' 상태인 것만 상태수정 가능
+        return false
       } else {
-        this.$swal(
-          '이미 존재하는 이메일입니다',
-          '같은 주소의 이메일이 확인되었습니다',
-          'error'
-        )
-        this.editedItem.email = ''
-        this.isValidEmail = false
+        return true
       }
     },
-    async getUsersBy4 () {
-      var tmpSearchType = this.selectedSearchType
-      if (!tmpSearchType) {
-        tmpSearchType = 0
-      }
-      var tmpSearchContent = this.searchContent
-      if (!tmpSearchContent) {
-        tmpSearchContent = 0
-      }
-      const response = await UserService.fetchUsersBy4({
-        startDate: this.startDate,
-        endDate: this.endDate,
-        searchType: tmpSearchType,
-        searchContent: tmpSearchContent
-      })
-      this.users = response.data
-      for (var i = 0; i < this.users.length; i++) {
-        switch (this.users[i].car_type) {
-          case '1' :
-            this.users[i].car_typeValue = '소형'
-            break
-          case '2' :
-            this.users[i].car_typeValue = '중형'
-            break
-          case '3' :
-            this.users[i].car_typeValue = '대형'
-            break
-          default :
-            break
-        }
-      }
-      for (i = 0; i < this.users.length; i++) {
-        switch (this.users[i].level) {
-          case '1' :
-            this.users[i].levelValue = '최고관리자'
-            break
-          case '10' :
-            this.users[i].levelValue = '데이터관리자'
-            break
-          case '99' :
-            this.users[i].levelValue = '일반사용자'
-            break
-          default :
-            break
-        }
-      }
-    },
-    checkEmail () {
-      // this.$validator.validateAll().then((result) => {
-      // https://jsfiddle.net/pp0w8u6s/
-      this.$validator.validate('email', this.editedItem.email).then((result) => {
-        if (!result) {
-          return
-        }
-        this.checkDuplicatedEmail(this.editedItem.email)
-      }).catch(() => {})
-    },
-    editItem (item) {
-      this.editedIndex = this.users.indexOf(item)
-      this.editedItem = Object.assign({}, item)
-      // console.log(item)
-      this.editedItem.level = this.users[this.editedIndex].level
-      if (this.users[this.editedIndex].level === '99') {  // 권한 레벨 99인 일반사용자의 경우 비번수정이 불가능
-        this.dlgLevel = 0
-      } else {      // 권한 레벨 1, 10일 경우 비번수정 가능
-        this.dlgLevel = 1
-        this.editedItem.password = '' // 기본적으로 비번 입력칸을 공백으로 두어 비번입력을 해야 수정 가능하도록 함
-        this.editedItem.password2 = ''
-      }
-      this.dialog = true
-      this.formTitle = '사용자 수정 - ' + this.users[this.editedIndex].name
-      this.dlgForNew = 0
-    },
-    deleteItem (item) {
-      const index = this.users.indexOf(item)
+    deleteReport () {
+      const index = this.editedIndex
       this.$swal({
-        title: '이 사용자를 삭제 하시겠습니까?',
+        title: '이 제보를 삭제 하시겠습니까?',
         text: '삭제 후에 되돌릴 수 없습니다',
         type: 'warning',
         showCancelButton: true,
@@ -723,163 +664,17 @@ export default {
         cancelButtonText: '취소합니다'
       }).then((result) => {
         if (result.value) {
-          this.deleteUser(item._id)
-          this.users.splice(index, 1)
+          this.deleteReportWithCode()
+          this.reports.splice(index, 1)
+          this.dialog = false
           this.$swal(
             '삭제했습니다!',
-            '사용자가 삭제되었습니다',
+            '제보가 삭제되었습니다',
             'success'
           )
         }
       })
-    },
-    leaveItem (item) {
-      const index = this.users.indexOf(item)
-      this.$swal({
-        title: '이 사용자를 탈퇴 시키겠습니까?',
-        text: '탈퇴 후에 되돌릴 수 없습니다',
-        type: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: '네, 탈퇴시킵니다',
-        cancelButtonText: '취소합니다'
-      }).then((result) => {
-        if (result.value) {
-          this.leaveUser(item._id)
-          this.users.splice(index, 1)
-          this.$swal(
-            '탈퇴 시켰습니다!',
-            '사용자가 탈퇴되었습니다',
-            'success'
-          )
-        }
-      })
-    },
-    close () {
-      this.dialog = false
-      this.formTitle = '새 사용자 추가'
-      this.dlgForNew = 1
-      setTimeout(() => {
-        this.editedItem = Object.assign({}, this.defaultItem)
-        this.editedIndex = -1
-      }, 300)
-    },
-    save () {
-      this.$validator.validateAll().then((result) => {
-        if (!result) {
-          return
-        }
-        // DB Insert
-        if (this.editedIndex > -1) {  // 사용자 수정
-          if (this.dlgLevel === 1) {  // 권한레벨이 99가 아닌 1, 10인 경우
-            if (this.editedItem.password === '') {  // 비밀번호 입력하지 않은 경우 유효성검사를 하지 않는다.
-            } else {  // 비밀번호를 입력한 경우 유효성 검사를 한다.
-              // 비밀번호 유효성 검사
-              if (!this.validatePassword(this.editedItem.password)) {
-                this.$swal(
-                  '유효한 암호를 입력해주세요',
-                  '문자 + 숫자 + 특수기호 조합 최소6자리',
-                  'error'
-                )
-                return
-              }
-              // 비밀번호 재확인 검사
-              if (this.editedItem.password !== this.editedItem.password2) {
-                this.$swal(
-                  '동일한 암호를 입력해주세요',
-                  '문자 + 숫자 + 특수기호 조합 최소6자리',
-                  'error'
-                )
-                return
-              }
-            }
-          } else {    // 권한레벨이 99인 경우 비밀번호 수정을 못하도록 한다
-            this.editedItem.password = ''
-          }
-          this.updateUser()
-          this.users.splice(this.editedIndex, 1)
-          this.users.push(this.editedItem)
-        } else {                      // 새 사용자 추가
-          // 이메일 유효성 검사
-          if (!this.isValidEmail) {
-            this.$swal(
-              '이메일 중복체크를 해주세요',
-              '이메일 중복체크가 안되었습니다',
-              'error'
-            )
-            return
-          }
-          // 비밀번호 유효성 검사
-          if (!this.validatePassword(this.editedItem.password)) {
-            this.$swal(
-              '유효한 암호를 입력해주세요',
-              '문자 + 숫자 + 특수기호 조합 최소6자리',
-              'error'
-            )
-            return
-          }
-          // 비밀번호 재확인 검사
-          if (this.editedItem.password !== this.editedItem.password2) {
-            this.$swal(
-              '동일한 암호를 입력해주세요',
-              '문자 + 숫자 + 특수기호 조합 최소6자리',
-              'error'
-            )
-            return
-          }
-          this.createNewUser()
-          this.users.push(this.editedItem)
-        }
-        this.editedItem = Object.assign({}, this.defaultItem)
-        this.$swal({
-          type: 'success',
-          title: '사용자를 저장하였습니다',
-          showConfirmButton: false,
-          timer: 777
-        })
-        this.dialog = false
-      }).catch(() => {})
-    },
-    // http://frontend.diffthink.kr/2018/02/blog-post.html
-    validatePassword (character) {
-      return /^(?=.*[A-Za-z])(?=.*\d)(?=.*[$@$!%*#?&])[A-Za-z\d$@$!%*#?&]{6,}$/.test(character)
-    },
-    onChangeLevel: function (event) {
-      // console.log(event)
-      this.editedItem.level = event
-      // this.selectedLandId = event
-      // this.getCropCodeByLandId(this.selectedLandId)
-    },
-    onChangeCarType: function (event) {
-      this.editedItem.car_type = event
-    },
-    onChangeSearchType: function (event) {
-      this.selectedSearchType = event
-      if (event === 'byLevel') {
-        this.searchContentDisabled = false
-      } else {
-        this.searchContentDisabled = true
-      }
-    },
-    onChangeSearchContentLevel: function (event) {
-      // console.log(event)
-      this.searchContent = event
-    },
-    searchUsers () {
-      this.loader = 'loading'
-      this.getUsersBy4()
-    },
-    searchReset () {
-      this.startDate = ''
-      this.endDate = ''
-      this.e2 = null
-      this.searchContent = ''
-      this.searchContentDisabled = true
-      this.getAllUsers()
-      this.$validator.reset()
-    },
-    */
+    }
   }
 }
 </script>

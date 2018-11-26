@@ -6,11 +6,13 @@ import router from './router'
 import Vuetify from 'vuetify'
 // import 'vuetify/dist/vuetify.min.css'
 import 'vuetify/dist/vuetify_mod.css'
+/*
 import FullCalendar from 'vue-full-calendar'
 import 'fullcalendar/dist/fullcalendar.min.css'
+*/
 
-/*
 import RegisterModal from './components/RegisterModal.vue'
+/*
 import JournalModal from './components/JournalModal.vue'
 import JournalModalForEdit from './components/JournalModalForEdit.vue'
 import AddWorkTypeModal from './components/AddWorkTypeModal.vue'
@@ -30,8 +32,8 @@ import VueSession from 'vue-session'
 // import axios from 'axios'
 // import VueDaumMap from 'vue-daum-map'
 
-/*
 Vue.component('registerModal', RegisterModal)
+/*
 Vue.component('journalModal', JournalModal)
 Vue.component('journalModalForEdit', JournalModalForEdit)
 Vue.component('addWorkTypeModal', AddWorkTypeModal)
@@ -43,7 +45,7 @@ Vue.component('parkingExcel', ParkingExcel)
 Vue.component('parkingManagerMapDetail', ParkingManagerMapDetail)
 
 Vue.use(Vuetify)
-Vue.use(FullCalendar)
+// Vue.use(FullCalendar)
 Vue.use(VeeValidate)
 Vue.use(VueSweetalert2)
 Vue.use(VueMq, {

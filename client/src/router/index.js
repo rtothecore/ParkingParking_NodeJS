@@ -9,6 +9,7 @@ const routerOptions = [
   { path: '/parkingManager', component: 'ParkingManager' },
   { path: '/parkingMap', component: 'ParkingManagerMap' },
   { path: '/reportManager', component: 'ReportManager' },
+  { path: '/notice', component: 'NoticeManager' },
   { path: '/stats', component: 'Stats' },
   { path: '/config', component: 'Config' },
   { path: '/workTime', component: 'WorkTime' },

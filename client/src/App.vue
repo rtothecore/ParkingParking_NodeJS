@@ -1,5 +1,5 @@
 <template>
-  <v-app v-if="$mq === 'laptop' || $mq === 'desktop'">
+  <v-app>
     <!-- https://pt.stackoverflow.com/questions/293349/background-image-com-vuetify -->
     <v-toolbar class="back" app>
       
@@ -82,13 +82,15 @@
   export default {
     data () {
       return {
+        timeoutSet: false,
         isBackImgActive: false,
         btnLogOutSeen: false,
         appTitle: '주차관리 시스템',
         sidebar: false,
         menuItems: [
-          {title: '사용자관리', path: '/', icon: 'assignment_turned_in', class: 'homeImg'},
-          {title: '주차장관리', path: '/parkingManager', icon: 'assignment', class: 'searchImg'},
+          {title: '공지사항', path: '/notice', icon: 'flag', class: 'homeImg'},
+          {title: '사용자관리', path: '/', icon: 'supervisor_account', class: 'homeImg'},
+          {title: '주차장관리', path: '/parkingManager', icon: 'local_parking', class: 'searchImg'},
           {title: '주차장관리(맵)', path: '/parkingMap', icon: 'map', class: 'searchImg'},
           {title: '제보관리', path: '/reportManager', icon: 'assignment_late', class: 'predictImg'}
           /* {title: '통계', path: '/stats', icon: 'assessment'}, */
@@ -110,6 +112,12 @@
       } else {
         this.btnLogOutSeen = true
         this.isBackImgActive = false
+        if (!this.timeoutSet) { // 2번 이상 실행되는 것 막기
+          // https://stackoverflow.com/questions/8257143/session-timeout-creation-for-application
+          // https://stackoverflow.com/questions/37465289/how-to-set-timeout-in-a-vuejs-method
+          setTimeout(function () { this.checkIfContinue() }.bind(this), 30 * 60 * 1000) // 30분 마다 세션 타임아웃
+          this.timeoutSet = true
+        }
       }
     },
     methods: {
@@ -122,6 +130,16 @@
       moveTo: function (val) {
         console.log(val)
         this.$router.push(val)
+      },
+      checkIfContinue: function () {
+        if (this.$session.exists()) {
+          if (confirm('Do you want to continue?')) {
+            setTimeout(function () { this.checkIfContinue() }.bind(this), 30 * 60 * 1000)
+            this.timeoutSet = false
+          } else {
+            this.logout()
+          }
+        }
       }
     }
   }

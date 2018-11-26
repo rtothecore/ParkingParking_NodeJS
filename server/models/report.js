@@ -16,7 +16,9 @@ var ReportSchema = new Schema({
 	parking_pictureB: String,
 	parking_pictureC: String,
 	status: String,
-	hold_reason: String
+	hold_reason: String,
+	delete_status: String,
+	delete_reason: String
 })
 
 var Report = mongoose.model("Report", ReportSchema)

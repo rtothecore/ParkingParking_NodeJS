@@ -9,6 +9,10 @@ export default {
     return Api().get('parkings/searchBy4/' + params.startDate + '/' + params.endDate + '/' + params.searchType + '/' + params.searchContent, params)
   },
 
+  fetchParkingsBy2 (params) {
+    return Api().get('parkings/searchBy2/' + params.display + '/' + params.searchContent, params)
+  },
+
   fetchParkingWithDisplay (params) {
     return Api().get('getParkingWithDisplay/' + params.display, params)
   },

@@ -11,8 +11,15 @@ export default {
 
   updateReport (params) {
     return Api().put('updateReport', params)
-  }
+  },
 
+  updateReportWithHoldreason (params) {
+    return Api().put('updateReportWithHoldreason', params)
+  },
+
+  deleteReport (params) {
+    return Api().delete('deleteReport/' + params.code)
+  }
   /*
   fetchUserByEmailNPw (params) {
     return Api().get('login/' + params.email + '/' + encodeURI(params.pw), params)
